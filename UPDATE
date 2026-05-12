@@ -1,5 +1,6 @@
 import os, sys, ctypes, time, threading, subprocess, psutil, requests, glob
 import customtkinter as ctk
+from PIL import Image  # <--- Added Image library
 from datetime import datetime
 
 # --- NO HIDE CONSOLE OR ADMIN CODE HERE ---
@@ -92,7 +93,7 @@ class AccountRow(ctk.CTkFrame):
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("PXG HUB ROBLOX MANAGER v1.0")
+        self.title("Gemini RBX Manager v4.8")
         self.geometry("1300x800")
         self.configure(fg_color=BG_COLOR)
         self.accounts = {}
@@ -112,7 +113,23 @@ class App(ctk.CTk):
         # Logo/Title Area
         logo_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         logo_frame.pack(pady=(20, 30), fill="x")
-        ctk.CTkLabel(logo_frame, text="💠", font=("Arial", 36), text_color=CYAN).pack()
+        
+        # --- LOGO LOADING LOGIC ---
+        # Get the folder where main.py is currently located
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        logo_path = os.path.join(script_dir, "logo.png")
+
+        if os.path.exists(logo_path):
+            # Load and display the custom logo (resized to 90x90 to fit nicely)
+            my_logo = ctk.CTkImage(light_image=Image.open(logo_path),
+                                   dark_image=Image.open(logo_path),
+                                   size=(90, 90))
+            ctk.CTkLabel(logo_frame, text="", image=my_logo).pack()
+        else:
+            # Fallback if logo.png is missing
+            ctk.CTkLabel(logo_frame, text="💠", font=("Arial", 36), text_color=CYAN).pack()
+        # --------------------------
+
         ctk.CTkLabel(logo_frame, text="PXG HUB", font=("Arial", 16, "bold"), text_color="white").pack(pady=(5,0))
         ctk.CTkLabel(logo_frame, text="ROBLOX MANAGER", font=("Arial", 10, "bold"), text_color=CYAN).pack()
 
@@ -129,7 +146,6 @@ class App(ctk.CTk):
         ctk.CTkLabel(lbl_sys, text="SYSTEM ELEVATION", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left")
         ctk.CTkLabel(lbl_sys, text="● ADMIN MOD", font=("Arial", 10, "bold"), text_color=GREEN).pack(side="right")
         
-        # ---> CHANGED DOWNLOAD HELPER TO UPDATE <---
         ctk.CTkButton(sys_frame, text="UPDATE", fg_color="transparent", border_width=1, border_color=YELLOW, text_color=YELLOW, font=("Arial", 11, "bold"), command=self.update_app).pack(fill="x", pady=4)
         ctk.CTkButton(sys_frame, text="⏻ JOIN ALL", fg_color="transparent", border_width=1, border_color=CYAN, text_color=CYAN, font=("Arial", 11, "bold"), command=self.toggle_enable_all).pack(fill="x", pady=4)
         ctk.CTkButton(sys_frame, text="✕ KILL ALL PROCESS", fg_color="transparent", border_width=1, border_color=RED, text_color=RED, font=("Arial", 11, "bold"), command=self.kill_all_process).pack(fill="x", pady=4)
@@ -186,7 +202,6 @@ class App(ctk.CTk):
         # Dashboard Title
         dash_title_bar = ctk.CTkFrame(self.dash_wrapper, fg_color="transparent", height=40)
         dash_title_bar.pack(fill="x", padx=20, pady=10)
-        # ---> REMOVED letter_spacing=2 HERE <---
         ctk.CTkLabel(dash_title_bar, text="ACCOUNT DASHBOARD", font=("Arial", 14, "bold"), text_color="white").pack(side="left")
         ctk.CTkLabel(dash_title_bar, text="● SYSTEM ACTIVE", font=("Arial", 11, "bold"), text_color=CYAN).pack(side="right")
 
@@ -225,11 +240,10 @@ class App(ctk.CTk):
         self.add_log("G E M I N I _ R B X _ S T A N D B Y")
 
     # ========================================================
-    # NEW UPDATE SYSTEM METHODS
+    # UPDATE SYSTEM
     # ========================================================
     def update_app(self):
         self.add_log("Checking for updates from GitHub...")
-        # Run in a background thread so the GUI doesn't freeze while fetching
         threading.Thread(target=self._perform_update, daemon=True).start()
 
     def _perform_update(self):
@@ -238,20 +252,14 @@ class App(ctk.CTk):
             res = requests.get(url, timeout=10)
             if res.status_code == 200:
                 new_code = res.text
-                
-                # Sanity check: Ensure it actually downloaded a full python script
                 if len(new_code.strip()) > 100: 
                     current_file = os.path.abspath(__file__)
-                    
-                    # Overwrite this current script with the new code
                     with open(current_file, "w", encoding="utf-8") as f:
                         f.write(new_code)
                     
                     self.add_log("✅ Update applied successfully!")
                     self.add_log("Restarting application in 3 seconds...")
                     time.sleep(3)
-                    
-                    # Execute process replacement to restart the python script
                     os.execl(sys.executable, sys.executable, *sys.argv)
                 else:
                     self.add_log("❌ Update file is too small or invalid. Aborting.")
@@ -266,7 +274,7 @@ class App(ctk.CTk):
         ts = datetime.now().strftime("%H:%M:%S")
         self.log_box.insert("end", f"[{ts}] {msg}\n")
         self.log_box.see("end")
-        print(f"[{ts}] {msg}") # Prints to CMD
+        print(f"[{ts}] {msg}")
 
     def clear_logs(self):
         self.log_box.delete("1.0", "end")
