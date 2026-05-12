@@ -273,7 +273,7 @@ class App(ctk.CTk):
         self.header_check = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(col_headers, text="", variable=self.header_check, width=30, fg_color=CYAN, command=self.toggle_select_all).pack(side="left", padx=(10, 5))
         ctk.CTkLabel(col_headers, text="ACCOUNT", width=140, anchor="w", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
-        ctk.CTkLabel(col_headers, text="METHOD / DUAL INPUTS (ID & PS LINK)", width=430, anchor="w", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
+        ctk.CTkLabel(col_headers, text="JOINING METHOD (PLACE ID & PS LINK)", width=430, anchor="w", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
         ctk.CTkLabel(col_headers, text="STATUS", width=90, anchor="w", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
         ctk.CTkLabel(col_headers, text="LAST EVENT", width=120, anchor="w", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
         ctk.CTkLabel(col_headers, text="ACTION", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="right", padx=10)
@@ -285,7 +285,7 @@ class App(ctk.CTk):
 
         self.log_box = ctk.CTkTextbox(self.main_container, height=140, font=("Consolas", 12), fg_color="#0A0A0A", text_color="#AAAAAA", border_width=1, border_color="#222")
         self.log_box.pack(fill="x", padx=20, pady=(10, 20))
-        self.add_log("WELCOME TO GEMINI MANAGER — READY.")
+        self.add_log("WELCOME TO OUR HUB ROBLOX MANAGER")
 
     # ==========================================
     # LOGIC (UNCHANGED)
