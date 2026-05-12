@@ -1,1 +1,417 @@
-Test123 Python 67
+import os, sys, ctypes, time, threading, subprocess, psutil, requests, glob
+import customtkinter as ctk
+from datetime import datetime
+
+# --- NO HIDE CONSOLE OR ADMIN CODE HERE ---
+# (The .bat file handles this now so you can see errors!)
+
+ctk.set_appearance_mode("Dark")
+
+# UI Constants to match the design
+BG_COLOR = "#0A0A0A"
+PANEL_COLOR = "#111111"
+CYAN = "#00E5FF"
+GREEN = "#00E676"
+RED = "#FF3D00"
+YELLOW = "#FFEA00"
+PURPLE = "#AA00FF"
+DARK_BTN = "#1A1A1A"
+TEXT_GRAY = "#666666"
+
+class AccountRow(ctk.CTkFrame):
+    def __init__(self, master, name, cookie, global_id, app_ref, **kwargs):
+        super().__init__(master, fg_color="transparent", **kwargs)
+        self.app = app_ref
+        self.pid = None
+        self.account_name = name
+        self.cookie = cookie
+        self.rejoin_attempts = 0
+        self.is_account_on = False 
+        
+        # Grid/Fixed Widths to align with headers
+        self.check_var = ctk.BooleanVar(value=False)
+        self.cb_select = ctk.CTkCheckBox(self, text="", variable=self.check_var, width=30, fg_color=CYAN, border_color="#333", hover_color="#00A3B4")
+        self.cb_select.pack(side="left", padx=(10, 5))
+
+        self.lbl_name = ctk.CTkLabel(self, text=name.upper(), font=("Consolas", 12, "bold"), width=150, anchor="w", text_color="#DDDDDD")
+        self.lbl_name.pack(side="left", padx=5)
+
+        self.entry_id = ctk.CTkEntry(self, placeholder_text="Place ID", width=130, fg_color="#151515", border_color="#333")
+        self.entry_id.insert(0, global_id)
+        self.entry_id.pack(side="left", padx=5)
+
+        # Status Group
+        self.status_frame = ctk.CTkFrame(self, fg_color="transparent", width=120)
+        self.status_frame.pack(side="left", padx=5)
+        self.status_frame.pack_propagate(False)
+        self.status_circle = ctk.CTkLabel(self.status_frame, text="●", text_color="gray", width=20)
+        self.status_circle.pack(side="left")
+        self.lbl_status = ctk.CTkLabel(self.status_frame, text="OFFLINE", text_color="gray", font=("Arial", 11, "bold"))
+        self.lbl_status.pack(side="left", padx=(2, 0))
+
+        # Last Event / Rejoin Placeholder
+        self.lbl_event = ctk.CTkLabel(self, text="Standby...", width=180, anchor="w", text_color=TEXT_GRAY, font=("Consolas", 11))
+        self.lbl_event.pack(side="left", padx=5)
+
+        self.lbl_count = ctk.CTkLabel(self, text=f"0/{self.app.entry_limit.get()}", width=80, anchor="w", font=("Consolas", 12))
+        self.lbl_count.pack(side="left", padx=5)
+
+        # Action Buttons
+        self.action_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.action_frame.pack(side="left", padx=5, fill="x", expand=True)
+        
+        self.btn_power = ctk.CTkButton(self.action_frame, text="OFF", width=50, height=24, fg_color=RED, hover_color="#D50000", font=("Arial", 11, "bold"), command=self.toggle_power)
+        self.btn_power.pack(side="left", padx=(0, 5))
+        
+        ctk.CTkButton(self.action_frame, text="KILL", width=40, height=24, fg_color="transparent", border_width=1, border_color=RED, text_color=RED, hover_color="#330000", font=("Arial", 11, "bold"), command=self.kill_proc).pack(side="left", padx=5)
+        ctk.CTkButton(self.action_frame, text="DEL", width=40, height=24, fg_color=DARK_BTN, hover_color="#333", font=("Arial", 11, "bold"), command=self.remove_me).pack(side="left", padx=5)
+
+    def toggle_power(self, force_state=None):
+        if force_state is not None:
+            self.is_account_on = force_state
+        else:
+            self.is_account_on = not self.is_account_on
+            
+        self.btn_power.configure(text="ON" if self.is_account_on else "OFF", 
+                                 fg_color=GREEN if self.is_account_on else RED,
+                                 text_color="black" if self.is_account_on else "white")
+        if not self.is_account_on: 
+            self.kill_proc()
+
+    def kill_proc(self):
+        if self.pid:
+            try: psutil.Process(self.pid).kill()
+            except: pass
+            self.pid = None
+        self.lbl_event.configure(text="Process killed manually.")
+
+    def remove_me(self):
+        self.app.remove_account(self.account_name)
+        self.destroy()
+
+class App(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.title("Gemini RBX Manager v4.8")
+        self.geometry("1300x800")
+        self.configure(fg_color=BG_COLOR)
+        self.accounts = {}
+        self.log_path = os.path.join(os.environ['LOCALAPPDATA'], 'Roblox', 'logs')
+
+        self.setup_ui()
+
+        threading.Thread(target=self.multi_instance_unlocker, daemon=True).start()
+        threading.Thread(target=self.monitor_loop, daemon=True).start()
+
+    def setup_ui(self):
+        # ================= LEFT SIDEBAR =================
+        self.sidebar = ctk.CTkFrame(self, width=240, fg_color="#0D0D0D", corner_radius=0)
+        self.sidebar.pack(side="left", fill="y")
+        self.sidebar.pack_propagate(False)
+
+        # Logo/Title Area
+        logo_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        logo_frame.pack(pady=(20, 30), fill="x")
+        ctk.CTkLabel(logo_frame, text="💠", font=("Arial", 36), text_color=CYAN).pack()
+        ctk.CTkLabel(logo_frame, text="PXG HUB", font=("Arial", 16, "bold"), text_color="white").pack(pady=(5,0))
+        ctk.CTkLabel(logo_frame, text="ROBLOX MANAGER", font=("Arial", 10, "bold"), text_color=CYAN).pack()
+
+        # Main Sidebar Buttons
+        ctk.CTkButton(self.sidebar, text="+ ADD ACCOUNT", fg_color=CYAN, text_color="black", font=("Arial", 12, "bold"), command=self.add_account_dialog).pack(pady=(0, 10), padx=20, fill="x")
+        ctk.CTkButton(self.sidebar, text="✕ CLEAR LOGS", fg_color=DARK_BTN, text_color="white", font=("Arial", 11, "bold"), command=self.clear_logs).pack(pady=(0, 20), padx=20, fill="x")
+
+        # System Elevation Group
+        sys_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        sys_frame.pack(fill="x", padx=20, pady=(10, 20))
+        
+        lbl_sys = ctk.CTkFrame(sys_frame, fg_color="transparent")
+        lbl_sys.pack(fill="x", pady=(0, 10))
+        ctk.CTkLabel(lbl_sys, text="SYSTEM ELEVATION", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left")
+        ctk.CTkLabel(lbl_sys, text="● ADMIN MOD", font=("Arial", 10, "bold"), text_color=GREEN).pack(side="right")
+        
+        ctk.CTkButton(sys_frame, text="DOWNLOAD HELPER", fg_color="transparent", border_width=1, border_color=YELLOW, text_color=YELLOW, font=("Arial", 11, "bold")).pack(fill="x", pady=4)
+        ctk.CTkButton(sys_frame, text="⏻ JOIN ALL", fg_color="transparent", border_width=1, border_color=CYAN, text_color=CYAN, font=("Arial", 11, "bold"), command=self.toggle_enable_all).pack(fill="x", pady=4)
+        ctk.CTkButton(sys_frame, text="✕ KILL ALL PROCESS", fg_color="transparent", border_width=1, border_color=RED, text_color=RED, font=("Arial", 11, "bold"), command=self.kill_all_process).pack(fill="x", pady=4)
+
+        # Auto Rejoin Group
+        rejoin_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        rejoin_frame.pack(fill="x", padx=20, pady=(10, 20))
+        ctk.CTkLabel(rejoin_frame, text="AUTO REJOIN — ALL", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(anchor="w", pady=(0, 10))
+        
+        ctk.CTkButton(rejoin_frame, text="▷ ENABLE REJOIN ALL", fg_color=GREEN, text_color="black", font=("Arial", 11, "bold"), command=self.toggle_enable_all).pack(fill="x", pady=4)
+        ctk.CTkButton(rejoin_frame, text="✕ DISABLE REJOIN ALL", fg_color=DARK_BTN, text_color=TEXT_GRAY, font=("Arial", 11, "bold"), command=self.toggle_disable_all).pack(fill="x", pady=4)
+        ctk.CTkButton(rejoin_frame, text="🖥 MULTI INSTANCE: ON", fg_color=PURPLE, text_color="white", font=("Arial", 11, "bold")).pack(fill="x", pady=4)
+
+        # Bottom Sidebar Configs
+        bottom_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        bottom_frame.pack(side="bottom", fill="x", padx=20, pady=20)
+        ctk.CTkButton(bottom_frame, text="💾 SAVE CONFIG", fg_color="transparent", border_width=1, border_color=CYAN, text_color=CYAN, font=("Arial", 11, "bold")).pack(fill="x", pady=5)
+        
+        export_import = ctk.CTkFrame(bottom_frame, fg_color="transparent")
+        export_import.pack(fill="x")
+        ctk.CTkButton(export_import, text="EXPORT TXT", fg_color=DARK_BTN, width=85, font=("Arial", 10, "bold")).pack(side="left")
+        ctk.CTkButton(export_import, text="IMPORT TXT", fg_color=DARK_BTN, width=85, font=("Arial", 10, "bold")).pack(side="right")
+
+
+        # ================= MAIN RIGHT AREA =================
+        self.main_container = ctk.CTkFrame(self, fg_color="transparent")
+        self.main_container.pack(side="right", fill="both", expand=True)
+
+        # Top Header Bar
+        self.action_bar = ctk.CTkFrame(self.main_container, height=60, fg_color=PANEL_COLOR, corner_radius=0)
+        self.action_bar.pack(side="top", fill="x", padx=20, pady=(20, 10))
+        
+        ctk.CTkLabel(self.action_bar, text="UPDATE PLACE ID SELECTED:", font=("Arial", 11, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=(20, 10))
+        self.bulk_id_entry = ctk.CTkEntry(self.action_bar, placeholder_text="New Place ID", width=150, fg_color="#151515", border_color="#333")
+        self.bulk_id_entry.pack(side="left", padx=5)
+        ctk.CTkButton(self.action_bar, text="UPDATE ID", width=90, fg_color="transparent", border_width=1, border_color=CYAN, text_color=CYAN, font=("Arial", 11, "bold"), command=self.bulk_update_id).pack(side="left", padx=5)
+        
+        # Top Header Right Side
+        ctk.CTkButton(self.action_bar, text="DELETE SELECTED", width=130, fg_color="transparent", border_width=1, border_color=RED, text_color=RED, font=("Arial", 11, "bold"), command=self.bulk_delete).pack(side="right", padx=(10, 20))
+        ctk.CTkButton(self.action_bar, text="ENABLE SELECTED", width=130, fg_color="transparent", border_width=1, border_color=GREEN, text_color=GREEN, font=("Arial", 11, "bold"), command=self.bulk_enable).pack(side="right", padx=10)
+        
+        limit_frame = ctk.CTkFrame(self.action_bar, fg_color="transparent")
+        limit_frame.pack(side="right", padx=20)
+        ctk.CTkLabel(limit_frame, text="REJOIN LIMIT:", font=("Arial", 11, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=(0,5))
+        self.entry_limit = ctk.CTkEntry(limit_frame, width=40, fg_color="#151515", border_color="#333", justify="center")
+        self.entry_limit.insert(0, "5")
+        self.entry_limit.pack(side="left")
+        self.entry_limit.bind("<KeyRelease>", self.update_all_counts)
+
+        # Dashboard Area
+        self.dash_wrapper = ctk.CTkFrame(self.main_container, fg_color=PANEL_COLOR, corner_radius=10)
+        self.dash_wrapper.pack(side="top", fill="both", expand=True, padx=20, pady=10)
+
+        # Dashboard Title
+        dash_title_bar = ctk.CTkFrame(self.dash_wrapper, fg_color="transparent", height=40)
+        dash_title_bar.pack(fill="x", padx=20, pady=10)
+        ctk.CTkLabel(dash_title_bar, text="ACCOUNT DASHBOARD", font=("Arial", 14, "bold"), text_color="white").pack(side="left")
+        ctk.CTkLabel(dash_title_bar, text="● SYSTEM ACTIVE", font=("Arial", 11, "bold"), text_color=CYAN).pack(side="right")
+
+        # Dashboard Column Headers
+        col_headers = ctk.CTkFrame(self.dash_wrapper, fg_color="#151515", height=30, corner_radius=5)
+        col_headers.pack(fill="x", padx=10, pady=(0, 5))
+        
+        lbl_font = ("Arial", 10, "bold")
+        ctk.CTkLabel(col_headers, text="■", width=30, text_color="white").pack(side="left", padx=(10, 5))
+        ctk.CTkLabel(col_headers, text="ACCOUNT", width=150, anchor="w", font=lbl_font, text_color=TEXT_GRAY).pack(side="left", padx=5)
+        ctk.CTkLabel(col_headers, text="PLACE ID", width=130, anchor="w", font=lbl_font, text_color=TEXT_GRAY).pack(side="left", padx=5)
+        ctk.CTkLabel(col_headers, text="STATUS", width=120, anchor="w", font=lbl_font, text_color=TEXT_GRAY).pack(side="left", padx=5)
+        ctk.CTkLabel(col_headers, text="LAST EVENT / REJOIN", width=180, anchor="w", font=lbl_font, text_color=TEXT_GRAY).pack(side="left", padx=5)
+        ctk.CTkLabel(col_headers, text="ATTEMPTS", width=80, anchor="w", font=lbl_font, text_color=TEXT_GRAY).pack(side="left", padx=5)
+        ctk.CTkLabel(col_headers, text="ACTION", anchor="w", font=lbl_font, text_color=TEXT_GRAY).pack(side="left", padx=10, fill="x", expand=True)
+
+        self.scroll = ctk.CTkScrollableFrame(self.dash_wrapper, fg_color="transparent")
+        self.scroll.pack(side="top", fill="both", expand=True, padx=10, pady=(0, 10))
+        
+        # Empty State Label
+        self.empty_label = ctk.CTkLabel(self.scroll, text="NO ACCOUNTS CONNECTED. CLICK '+ ADD ACCOUNT' TO BEGIN.", font=("Arial", 12, "bold"), text_color=TEXT_GRAY)
+        self.empty_label.pack(pady=100)
+
+        # Bottom Console
+        self.console_wrapper = ctk.CTkFrame(self.main_container, fg_color="transparent", height=180)
+        self.console_wrapper.pack(side="bottom", fill="x", padx=20, pady=(10, 20))
+        self.console_wrapper.pack_propagate(False)
+
+        console_title = ctk.CTkFrame(self.console_wrapper, fg_color="transparent")
+        console_title.pack(fill="x", pady=(0, 5))
+        ctk.CTkLabel(console_title, text="SYSTEM CONSOLE — REALTIME", font=("Consolas", 10, "bold"), text_color=TEXT_GRAY).pack(side="left")
+        ctk.CTkLabel(console_title, text="KERNEL THREAD: ACTIVE V4.8", font=("Consolas", 10, "bold"), text_color=TEXT_GRAY).pack(side="right")
+
+        self.log_box = ctk.CTkTextbox(self.console_wrapper, font=("Consolas", 12), fg_color="#0A0A0A", text_color="#AAAAAA", border_width=1, border_color="#222")
+        self.log_box.pack(fill="both", expand=True)
+        self.add_log("G E M I N I _ R B X _ S T A N D B Y")
+
+    def add_log(self, msg):
+        ts = datetime.now().strftime("%H:%M:%S")
+        self.log_box.insert("end", f"[{ts}] {msg}\n")
+        self.log_box.see("end")
+        print(f"[{ts}] {msg}") # This prints to the CMD so we can see what's happening
+
+    def clear_logs(self):
+        self.log_box.delete("1.0", "end")
+        self.add_log("G E M I N I _ R B X _ S T A N D B Y")
+
+    def kill_all_process(self):
+        self.add_log("Attempting to kill all running Roblox processes...")
+        for widget in self.accounts.values():
+            widget.kill_proc()
+        try:
+            subprocess.run(['taskkill', '/F', '/IM', 'RobloxPlayerBeta.exe'], capture_output=True)
+        except: pass
+
+    def update_all_counts(self, event=None):
+        limit = self.entry_limit.get() if self.entry_limit.get().isdigit() else "0"
+        for widget in self.accounts.values():
+            widget.lbl_count.configure(text=f"{widget.rejoin_attempts}/{limit}")
+
+    def toggle_enable_all(self):
+        for widget in self.accounts.values():
+            widget.toggle_power(force_state=True)
+
+    def toggle_disable_all(self):
+        for widget in self.accounts.values():
+            widget.toggle_power(force_state=False)
+
+    def bulk_update_id(self):
+        new_id = self.bulk_id_entry.get()
+        if not new_id: return
+        for widget in self.accounts.values():
+            if widget.check_var.get():
+                widget.entry_id.delete(0, "end")
+                widget.entry_id.insert(0, new_id)
+
+    def bulk_enable(self):
+        for widget in self.accounts.values():
+            if widget.check_var.get():
+                widget.toggle_power(force_state=True)
+
+    def bulk_delete(self):
+        to_delete = [name for name, widget in self.accounts.items() if widget.check_var.get()]
+        for name in to_delete:
+            self.accounts[name].remove_me()
+        if not self.accounts:
+            self.empty_label.pack(pady=100)
+
+    def close_roblox_handle(self):
+        try:
+            for proc in psutil.process_iter(['name', 'pid']):
+                if "RobloxPlayerBeta" in proc.info['name']:
+                    ctypes.windll.kernel32.CreateMutexW(None, True, "ROBLOX_singletonEvent")
+        except: pass
+
+    def multi_instance_unlocker(self):
+        while True:
+            self.close_roblox_handle()
+            try: subprocess.run(['taskkill', '/F', '/IM', 'RobloxPlayerLauncher.exe'], capture_output=True)
+            except: pass
+            time.sleep(0.5)
+
+    def check_disconnect_in_logs(self, pid):
+        if not os.path.exists(self.log_path): return False
+        try:
+            list_of_files = glob.glob(os.path.join(self.log_path, '*Player*'))
+            if not list_of_files: return False
+            latest_file = max(list_of_files, key=os.path.getctime)
+            
+            dc_keywords =[
+                "same account launched experience from different devices",
+                "Connection lost",
+                "Internet disconnect",
+                "lost connection",
+                "Error Code: 264",
+                "Error Code: 277",
+                "Error Code: 279"
+            ]
+            
+            with open(latest_file, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read().lower()
+                for key in dc_keywords:
+                    if key.lower() in content:
+                        return True
+        except: pass
+        return False
+
+    def get_auth_ticket(self, cookie):
+        try:
+            sess = requests.Session()
+            sess.cookies.set(".ROBLOSECURITY", cookie, domain=".roblox.com")
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://www.roblox.com/home",
+                "Origin": "https://www.roblox.com",
+                "Content-Type": "application/json"
+            }
+            res = sess.post("https://auth.roblox.com/v1/authentication-ticket", headers=headers)
+            csrf = res.headers.get("X-CSRF-TOKEN")
+            if not csrf: return None
+            res2 = sess.post("https://auth.roblox.com/v1/authentication-ticket", 
+                             headers={**headers, "X-CSRF-TOKEN": csrf})
+            return res2.headers.get("rbx-authentication-ticket")
+        except: return None
+
+    def launch_roblox(self, widget):
+        ticket = self.get_auth_ticket(widget.cookie)
+        if not ticket: return False
+        place_id = widget.entry_id.get()
+        if not place_id: return False
+        
+        self.close_roblox_handle()
+            
+        launch_str = f"roblox-player:1+launchmode:play+gameinfo:{ticket}+placelauncherurl:https%3A%2F%2Fassetgame.roblox.com%2Fgame%2FPlaceLauncher.ashx%3Frequest%3DRequestGame%26browserTrackerId%3D{int(time.time())}%26placeId%3D{place_id}%26isReadOnly%3Dfalse"
+        subprocess.Popen(f"start {launch_str}", shell=True)
+        return True
+
+    def monitor_loop(self):
+        while True:
+            all_procs = {p.pid: p.name() for p in psutil.process_iter(['name']) if "RobloxPlayerBeta" in p.info['name']}
+            limit_val = self.entry_limit.get()
+            limit = int(limit_val if limit_val.isdigit() else 0)
+            
+            for name, widget in self.accounts.items():
+                if not widget.is_account_on:
+                    widget.lbl_status.configure(text="PAUSED", text_color="gray")
+                    widget.status_circle.configure(text_color="gray")
+                    widget.lbl_event.configure(text="User Paused.")
+                    continue
+                
+                is_running = False
+                if widget.pid and widget.pid in all_procs:
+                    is_running = True
+                    widget.lbl_event.configure(text="Connected.")
+                    if self.check_disconnect_in_logs(widget.pid):
+                        self.add_log(f"⚠️ Disconnect detected for {name}. Killing...")
+                        widget.lbl_event.configure(text="Disconnect Detected", text_color=RED)
+                        widget.kill_proc()
+                        is_running = False
+                else:
+                    for pid, p_name in all_procs.items():
+                        if pid not in [w.pid for w in self.accounts.values() if w.pid]:
+                            widget.pid = pid
+                            is_running = True
+                            widget.lbl_event.configure(text="Process attached.")
+                            break
+
+                if is_running:
+                    widget.lbl_status.configure(text="ONLINE", text_color=GREEN)
+                    widget.status_circle.configure(text_color=GREEN)
+                else:
+                    widget.lbl_status.configure(text="OFFLINE", text_color=RED)
+                    widget.status_circle.configure(text_color=RED)
+                    
+                    if widget.rejoin_attempts < limit:
+                        self.add_log(f"🔄 Rejoining {name}...")
+                        widget.lbl_event.configure(text="Attempting Rejoin...", text_color=YELLOW)
+                        if self.launch_roblox(widget):
+                            widget.rejoin_attempts += 1
+                            self.update_all_counts()
+                            time.sleep(12) 
+                        else:
+                            self.add_log(f"❌ Failed ticket for {name}")
+                            widget.lbl_event.configure(text="Auth Ticket Failed", text_color=RED)
+            time.sleep(5)
+
+    def add_account_dialog(self):
+        dialog = ctk.CTkInputDialog(text="Enter Nickname:", title="Add Account")
+        name = dialog.get_input()
+        if name:
+            dialog_cookie = ctk.CTkInputDialog(text="Paste .ROBLOSECURITY Cookie:", title="Authentication")
+            cookie = dialog_cookie.get_input()
+            if cookie:
+                if len(self.accounts) == 0:
+                    self.empty_label.pack_forget()
+
+                row = AccountRow(self.scroll, name, cookie, "", self)
+                row.pack(fill="x", pady=5)
+                self.accounts[name] = row
+                self.add_log(f"Account '{name}' registered to database.")
+
+    def remove_account(self, name):
+        if name in self.accounts: 
+            del self.accounts[name]
+        self.add_log(f"Account '{name}' deleted.")
+        if not self.accounts:
+            self.empty_label.pack(pady=100)
+
+if __name__ == "__main__":
+    App().mainloop()
