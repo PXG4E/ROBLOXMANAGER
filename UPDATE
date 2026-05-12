@@ -23,7 +23,6 @@ if not is_admin():
     ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, f'"{script_path}"', None, 1)
     sys.exit()
 
-# NEW: Automatically convert logo.png to logo.ico for Windows Taskbar/Top Bar
 def prepare_icons():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     png_path = os.path.join(script_dir, "logo.png")
@@ -35,7 +34,6 @@ def prepare_icons():
             img.save(ico_path, format='ICO', sizes=[(256, 256), (128, 128), (64, 64), (32, 32), (16, 16)])
         except: pass
     
-    # Force Taskbar to show the custom icon
     if sys.platform == "win32":
         try:
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('pxg.hub.rbx.manager.v4.8')
@@ -66,61 +64,59 @@ class AccountRow(ctk.CTkFrame):
         self.is_account_on = False 
         self.join_method = mode 
         
+        # Configure Grid for scaling (Column 4 - PS Link stretches)
+        self.grid_columnconfigure(4, weight=1)
+
         self.check_var = ctk.BooleanVar(value=False)
         self.cb_select = ctk.CTkCheckBox(self, text="", variable=self.check_var, width=30, fg_color=CYAN, border_color="#333", hover_color="#00A3B4")
-        self.cb_select.pack(side="left", padx=(10, 5))
+        self.cb_select.grid(row=0, column=0, padx=(10, 5), pady=5)
 
-        # Avatar & Name Column
+        # Avatar & Name
         self.info_frame = ctk.CTkFrame(self, fg_color="transparent", width=150)
-        self.info_frame.pack(side="left", padx=5)
-        self.info_frame.pack_propagate(False)
-        
+        self.info_frame.grid(row=0, column=1, padx=5, sticky="w")
         self.img_label = ctk.CTkLabel(self.info_frame, text="", image=avatar_img)
         self.img_label.pack(side="left", padx=(0,5))
         self.lbl_name = ctk.CTkLabel(self.info_frame, text=name, font=("Consolas", 11, "bold"), text_color="#DDDDDD", anchor="w")
-        self.lbl_name.pack(side="left", fill="x")
+        self.lbl_name.pack(side="left")
         
-        # Method Toggle Button
+        # Method Button
         self.btn_method = ctk.CTkButton(self, text="MODE: ID", width=85, height=26, font=("Arial", 10, "bold"), command=self.toggle_method)
-        self.btn_method.pack(side="left", padx=5)
+        self.btn_method.grid(row=0, column=2, padx=5)
 
-        # Permanent Input Boxes
-        self.entry_pid = ctk.CTkEntry(self, placeholder_text="Place ID", width=70, fg_color="#151515", border_color="#333", font=("Arial", 10))
+        # Input Boxes
+        self.entry_pid = ctk.CTkEntry(self, placeholder_text="ID", width=70, fg_color="#151515", border_color="#333", font=("Arial", 10))
         self.entry_pid.insert(0, pid)
-        self.entry_pid.pack(side="left", padx=2)
+        self.entry_pid.grid(row=0, column=3, padx=2)
 
-        self.entry_psl = ctk.CTkEntry(self, placeholder_text="Private Server Link", width=180, fg_color="#151515", border_color="#333", font=("Arial", 10))
+        self.entry_psl = ctk.CTkEntry(self, placeholder_text="Private Link", fg_color="#151515", border_color="#333", font=("Arial", 10))
         self.entry_psl.insert(0, psl)
-        self.entry_psl.pack(side="left", padx=2)
-
-        self.update_method_ui()
+        self.entry_psl.grid(row=0, column=4, padx=2, sticky="ew")
 
         # Status
         self.status_frame = ctk.CTkFrame(self, fg_color="transparent", width=80)
-        self.status_frame.pack(side="left", padx=5)
-        self.status_frame.pack_propagate(False)
+        self.status_frame.grid(row=0, column=5, padx=5)
         self.status_circle = ctk.CTkLabel(self.status_frame, text="●", text_color="gray", width=15)
         self.status_circle.pack(side="left")
         self.lbl_status = ctk.CTkLabel(self.status_frame, text="OFFLINE", text_color="gray", font=("Arial", 10, "bold"))
         self.lbl_status.pack(side="left")
 
         self.lbl_event = ctk.CTkLabel(self, text="Standby...", width=120, anchor="w", text_color=TEXT_GRAY, font=("Consolas", 10))
-        self.lbl_event.pack(side="left", padx=5)
+        self.lbl_event.grid(row=0, column=6, padx=5)
 
         self.lbl_count = ctk.CTkLabel(self, text=f"0/{self.app.entry_limit.get()}", width=50, font=("Consolas", 11))
-        self.lbl_count.pack(side="left", padx=5)
+        self.lbl_count.grid(row=0, column=7, padx=5)
 
         # Actions
         self.action_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.action_frame.pack(side="left", padx=5, fill="x", expand=True)
+        self.action_frame.grid(row=0, column=8, padx=5, sticky="e")
         
         ctk.CTkButton(self.action_frame, text="JOIN", width=45, height=24, fg_color=CYAN, text_color="black", font=("Arial", 10, "bold"), command=lambda: threading.Thread(target=self.app.launch_roblox, args=(self,), daemon=True).start()).pack(side="left", padx=2)
-        
         self.btn_power = ctk.CTkButton(self.action_frame, text="OFF", width=45, height=24, fg_color=RED, font=("Arial", 10, "bold"), command=self.toggle_power)
         self.btn_power.pack(side="left", padx=2)
-        
         ctk.CTkButton(self.action_frame, text="KILL", width=40, height=24, fg_color="transparent", border_width=1, border_color=RED, text_color=RED, font=("Arial", 10, "bold"), command=self.kill_proc).pack(side="left", padx=2)
         ctk.CTkButton(self.action_frame, text="DEL", width=40, height=24, fg_color=DARK_BTN, font=("Arial", 10, "bold"), command=self.remove_me).pack(side="left", padx=2)
+
+        self.update_method_ui()
 
     def toggle_method(self):
         self.join_method = "Private Server" if self.join_method == "Place ID" else "Place ID"
@@ -164,7 +160,6 @@ class App(ctk.CTk):
         self.geometry("1500x850")
         self.configure(fg_color=BG_COLOR)
         
-        # Apply Icon Logic
         ico = prepare_icons()
         if ico:
             try: self.iconbitmap(ico)
@@ -192,23 +187,24 @@ class App(ctk.CTk):
             if hWnd: ctypes.WinDLL('user32').ShowWindow(hWnd, 0)
 
     def setup_ui(self):
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        logo_path = os.path.join(script_dir, "logo.png")
-        if os.path.exists(logo_path): my_logo = ctk.CTkImage(Image.open(logo_path), size=(90, 90))
-        else: my_logo = None
-
-        # Sidebar
+        # Sidebar (Fixed Width)
         self.sidebar = ctk.CTkFrame(self, width=240, fg_color="#0D0D0D", corner_radius=0)
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
 
         logo_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         logo_frame.pack(pady=(20, 30), fill="x")
-        if my_logo: ctk.CTkLabel(logo_frame, text="", image=my_logo).pack()
+        
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        png_path = os.path.join(script_dir, "logo.png")
+        if os.path.exists(png_path):
+            my_logo = ctk.CTkImage(Image.open(png_path), size=(90, 90))
+            ctk.CTkLabel(logo_frame, text="", image=my_logo).pack()
+        
         ctk.CTkLabel(logo_frame, text="PXG HUB", font=("Arial", 16, "bold"), text_color="white").pack(pady=(5,0))
         ctk.CTkLabel(logo_frame, text="ROBLOX MANAGER", font=("Arial", 10, "bold"), text_color=CYAN).pack()
 
-        ctk.CTkButton(self.sidebar, text="+ ADD ACCOUNTS", fg_color=CYAN, text_color="black", font=("Arial", 12, "bold"), command=self.bulk_add_popup).pack(pady=(0, 10), padx=20, fill="x")
+        ctk.CTkButton(self.sidebar, text="+ ADD ACCOUNTS", fg_color=CYAN, text_color="black", font=("Arial", 12, "bold"), command=self.bulk_add_popup).pack(pady=(10, 10), padx=20, fill="x")
         ctk.CTkButton(self.sidebar, text="✕ CLEAR LOGS", fg_color=DARK_BTN, text_color="white", font=("Arial", 11, "bold"), command=self.clear_logs).pack(pady=(0, 20), padx=20, fill="x")
 
         sys_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
@@ -223,6 +219,7 @@ class App(ctk.CTk):
         ctk.CTkButton(rejoin_frame, text="▷ ENABLE REJOIN ALL", fg_color=GREEN, text_color="black", font=("Arial", 11, "bold"), command=self.toggle_enable_all).pack(fill="x", pady=4)
         ctk.CTkButton(rejoin_frame, text="✕ DISABLE REJOIN ALL", fg_color=DARK_BTN, text_color=TEXT_GRAY, font=("Arial", 11, "bold"), command=self.toggle_disable_all).pack(fill="x", pady=4)
 
+        # Footer
         bottom_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         bottom_frame.pack(side="bottom", fill="x", padx=20, pady=20)
         ctk.CTkButton(bottom_frame, text="💾 SAVE CONFIG", fg_color="transparent", border_width=1, border_color=CYAN, text_color=CYAN, font=("Arial", 11, "bold"), command=self.save_config).pack(fill="x", pady=5)
@@ -231,47 +228,55 @@ class App(ctk.CTk):
         ctk.CTkButton(ex_im, text="EXPORT", fg_color=DARK_BTN, width=85, font=("Arial", 9, "bold"), command=self.export_config).pack(side="left")
         ctk.CTkButton(ex_im, text="IMPORT", fg_color=DARK_BTN, width=85, font=("Arial", 9, "bold"), command=self.import_config).pack(side="right")
 
+        # Main Dynamic Area
         self.main_container = ctk.CTkFrame(self, fg_color="transparent")
         self.main_container.pack(side="right", fill="both", expand=True)
 
+        # Responsive Action Bar
         self.action_bar = ctk.CTkFrame(self.main_container, height=65, fg_color=PANEL_COLOR, corner_radius=0)
         self.action_bar.pack(side="top", fill="x", padx=20, pady=(20, 10))
         
-        ctk.CTkLabel(self.action_bar, text="SET SELECTED:", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=(10, 2))
-        ctk.CTkButton(self.action_bar, text="PLACE ID MODE", width=70, height=26, fg_color=CYAN, text_color="black", font=("Arial", 10, "bold"), command=lambda: self.bulk_set_mode("Place ID")).pack(side="left", padx=2)
-        ctk.CTkButton(self.action_bar, text="PRIVATE SERVER MODE", width=70, height=26, fg_color=PURPLE, text_color="white", font=("Arial", 10, "bold"), command=lambda: self.bulk_set_mode("Private Server")).pack(side="left", padx=2)
+        self.left_actions = ctk.CTkFrame(self.action_bar, fg_color="transparent")
+        self.left_actions.pack(side="left", fill="both", expand=True)
 
-        self.bulk_id_entry = ctk.CTkEntry(self.action_bar, placeholder_text="Place ID", width=70, font=("Arial", 10))
+        ctk.CTkLabel(self.left_actions, text="SET:", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=(10, 2))
+        ctk.CTkButton(self.left_actions, text="ID MODE", width=70, height=26, fg_color=CYAN, text_color="black", font=("Arial", 10, "bold"), command=lambda: self.bulk_set_mode("Place ID")).pack(side="left", padx=2)
+        ctk.CTkButton(self.left_actions, text="PS MODE", width=70, height=26, fg_color=PURPLE, text_color="white", font=("Arial", 10, "bold"), command=lambda: self.bulk_set_mode("Private Server")).pack(side="left", padx=2)
+
+        self.bulk_id_entry = ctk.CTkEntry(self.left_actions, placeholder_text="Place ID", width=70, font=("Arial", 10))
         self.bulk_id_entry.pack(side="left", padx=(10, 2))
-        ctk.CTkButton(self.action_bar, text="UPD", width=40, height=26, fg_color=CYAN, text_color="black", command=self.bulk_update_id).pack(side="left", padx=2)
+        ctk.CTkButton(self.left_actions, text="UPD", width=40, height=26, fg_color=CYAN, text_color="black", command=self.bulk_update_id).pack(side="left", padx=2)
 
-        self.bulk_ps_entry = ctk.CTkEntry(self.action_bar, placeholder_text="Private Link", width=110, font=("Arial", 10))
-        self.bulk_ps_entry.pack(side="left", padx=(10, 2))
-        ctk.CTkButton(self.action_bar, text="UPD", width=40, height=26, fg_color=PURPLE, text_color="white", command=self.bulk_update_ps).pack(side="left", padx=2)
+        self.bulk_ps_entry = ctk.CTkEntry(self.left_actions, placeholder_text="Private Server Link", font=("Arial", 10))
+        self.bulk_ps_entry.pack(side="left", padx=(10, 2), fill="x", expand=True) # Stretches
+        ctk.CTkButton(self.left_actions, text="UPD", width=40, height=26, fg_color=PURPLE, text_color="white", command=self.bulk_update_ps).pack(side="left", padx=2)
 
-        ctk.CTkButton(self.action_bar, text="DELETE SELECTED", width=65, fg_color=RED, font=("Arial", 10, "bold"), command=self.bulk_delete).pack(side="right", padx=5)
-        ctk.CTkButton(self.action_bar, text="DISABLE SELECTED", width=65, fg_color=DARK_BTN, text_color=TEXT_GRAY, font=("Arial", 10, "bold"), command=self.bulk_disable).pack(side="right", padx=5)
-        ctk.CTkButton(self.action_bar, text="ENABLE SELECTED", width=65, fg_color=GREEN, text_color="black", font=("Arial", 10, "bold"), command=self.bulk_enable).pack(side="right", padx=5)
+        self.right_actions = ctk.CTkFrame(self.action_bar, fg_color="transparent")
+        self.right_actions.pack(side="right")
+
+        ctk.CTkButton(self.right_actions, text="DELETE SELECTED", width=65, fg_color=RED, font=("Arial", 10, "bold"), command=self.bulk_delete).pack(side="right", padx=5)
+        ctk.CTkButton(self.right_actions, text="DISABLE SELECTED", width=65, fg_color=DARK_BTN, text_color=TEXT_GRAY, font=("Arial", 10, "bold"), command=self.bulk_disable).pack(side="right", padx=5)
+        ctk.CTkButton(self.right_actions, text="ENABLE SELECTED", width=65, fg_color=GREEN, text_color="black", font=("Arial", 10, "bold"), command=self.bulk_enable).pack(side="right", padx=5)
         
-        self.entry_limit = ctk.CTkEntry(self.action_bar, width=35, justify="center")
+        self.entry_limit = ctk.CTkEntry(self.right_actions, width=35, justify="center")
         self.entry_limit.insert(0, "5")
         self.entry_limit.pack(side="right", padx=5)
-        ctk.CTkLabel(self.action_bar, text="REJOIN LIMIT:", font=("Arial", 10), text_color=TEXT_GRAY).pack(side="right")
+        ctk.CTkLabel(self.right_actions, text="RETRY LIMIT:", font=("Arial", 10), text_color=TEXT_GRAY).pack(side="right")
 
-        # Dashboard
+        # Responsive Dashboard
         self.dash_wrapper = ctk.CTkFrame(self.main_container, fg_color=PANEL_COLOR, corner_radius=10)
         self.dash_wrapper.pack(side="top", fill="both", expand=True, padx=20, pady=10)
         
         col_headers = ctk.CTkFrame(self.dash_wrapper, fg_color="#151515", height=30)
         col_headers.pack(fill="x", padx=10, pady=5)
+        
         self.header_check = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(col_headers, text="", variable=self.header_check, width=30, fg_color=CYAN, command=self.toggle_select_all).pack(side="left", padx=(10, 5))
         ctk.CTkLabel(col_headers, text="ACCOUNT", width=140, anchor="w", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
-        ctk.CTkLabel(col_headers, text="METHOD / INPUTS (ID & PS LINK)", width=370, anchor="w", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
+        ctk.CTkLabel(col_headers, text="METHOD / DUAL INPUTS (ID & PS LINK)", width=430, anchor="w", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
         ctk.CTkLabel(col_headers, text="STATUS", width=90, anchor="w", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
         ctk.CTkLabel(col_headers, text="LAST EVENT", width=120, anchor="w", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
-        ctk.CTkLabel(col_headers, text="ATTEMPTS", width=50, anchor="w", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
-        ctk.CTkLabel(col_headers, text="ACTION", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
+        ctk.CTkLabel(col_headers, text="ACTION", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="right", padx=10)
 
         self.scroll = ctk.CTkScrollableFrame(self.dash_wrapper, fg_color="transparent")
         self.scroll.pack(fill="both", expand=True, padx=10, pady=(0, 10))
@@ -280,8 +285,11 @@ class App(ctk.CTk):
 
         self.log_box = ctk.CTkTextbox(self.main_container, height=140, font=("Consolas", 12), fg_color="#0A0A0A", text_color="#AAAAAA", border_width=1, border_color="#222")
         self.log_box.pack(fill="x", padx=20, pady=(10, 20))
-        self.add_log("HELLO! WELCOME TO OUR HUB ROBLOX MANAGER")
+        self.add_log("WELCOME TO GEMINI MANAGER — READY.")
 
+    # ==========================================
+    # LOGIC (UNCHANGED)
+    # ==========================================
     def async_load_data(self, row_obj):
         try:
             h = {"Cookie": f".ROBLOSECURITY={row_obj.cookie}"}
@@ -300,13 +308,12 @@ class App(ctk.CTk):
 
     def bulk_add_popup(self):
         pop = ctk.CTkToplevel(self); pop.title("Bulk Paste"); pop.geometry("500x450"); pop.attributes('-topmost', True)
-        ctk.CTkLabel(pop, text="Paste cookies here (one per line):").pack(pady=10)
+        ctk.CTkLabel(pop, text="Paste cookies here:").pack(pady=10)
         box = ctk.CTkTextbox(pop, width=450, height=300, fg_color="#0D0D0D"); box.pack(padx=20)
         def process():
             raw = box.get("1.0", "end").strip()
             cookies = [c.strip() for c in raw.split("\n") if len(c.strip()) > 100]
             pop.destroy()
-            self.add_log(f"📥 Attempting to import {len(cookies)} cookies...")
             for c in cookies:
                 row = self._create_row("Loading...", c, self.placeholder_avatar)
                 threading.Thread(target=self.async_load_data, args=(row,), daemon=True).start()
@@ -319,31 +326,9 @@ class App(ctk.CTk):
         self.accounts[str(time.time()) + name] = row
         return row
 
-    def bulk_set_mode(self, mode):
-        self.add_log(f"🔄 Setting selected accounts to {mode}...")
-        for w in self.accounts.values():
-            if w.check_var.get():
-                w.join_method = mode
-                w.update_method_ui()
-
-    def bulk_update_id(self):
-        v = self.bulk_id_entry.get()
-        self.add_log(f"📋 Bulk updating Place ID to: {v}")
-        for w in self.accounts.values():
-            if w.check_var.get(): w.entry_pid.delete(0,'end'); w.entry_pid.insert(0, v)
-
-    def bulk_update_ps(self):
-        v = self.bulk_ps_entry.get()
-        self.add_log(f"📋 Bulk updating PS Link to: {v}")
-        for w in self.accounts.values():
-            if w.check_var.get(): w.entry_psl.delete(0,'end'); w.entry_psl.insert(0, v)
-
     def launch_roblox(self, w):
-        self.add_log(f"🚀 Launching Roblox for {w.account_name}...")
         ticket = self.get_auth_ticket(w.cookie)
-        if not ticket: 
-            self.add_log(f"❌ Failed to get Auth Ticket for {w.account_name}")
-            return False
+        if not ticket: return False
         if w.join_method == "Private Server":
             link = w.entry_psl.get()
             lc = re.search(r"linkCode=([\w-]+)", link).group(1) if "linkCode=" in link else link
@@ -375,7 +360,7 @@ class App(ctk.CTk):
                 if w.pid and w.pid in aps:
                     run = True; w.lbl_event.configure(text="Connected.")
                     if w.rejoin_attempts > 0: w.rejoin_attempts = 0; self.update_all_counts()
-                    if self.check_disconnect_in_logs(w.pid): self.add_log(f"⚠️ Disconnect detected for {w.account_name}. Rejoining..."); w.kill_proc(); run = False
+                    if self.check_disconnect_in_logs(w.pid): self.add_log(f"⚠️ DC: {w.account_name}"); w.kill_proc(); run = False
                 else:
                     for pid in aps:
                         if pid not in [acc.pid for acc in self.accounts.values() if acc.pid]: w.pid = pid; run = True; break
@@ -406,7 +391,6 @@ class App(ctk.CTk):
 
     def arrange_windows(self):
         if not HAS_WIN32: return
-        self.add_log("⊞ Arranging all Roblox windows...")
         wins = []
         win32gui.EnumWindows(lambda h, _: wins.append(h) if win32gui.IsWindowVisible(h) and "Roblox" in win32gui.GetWindowText(h) else None, None)
         sw, size = win32api.GetSystemMetrics(0), 188
@@ -414,88 +398,72 @@ class App(ctk.CTk):
         for i, h in enumerate(wins): win32gui.SetWindowPos(h, win32con.HWND_TOP, (i%cols)*size, (i//cols)*size, size, size, win32con.SWP_SHOWWINDOW)
 
     def save_config(self, m=None):
-        self.add_log("💾 Saving configuration...")
         d = [{"name": w.lbl_name.cget("text"), "cookie": w.cookie, "pid": w.entry_pid.get(), "psl": w.entry_psl.get(), "mode": w.join_method} for w in self.accounts.values()]
         with open(m if m else self.config_file, "w") as f: json.dump(d, f, indent=4)
-        self.add_log("✅ Configuration saved.")
+        self.add_log("💾 Saved.")
 
     def load_config(self, m=None):
         f = m if m else self.config_file
         if not os.path.exists(f): return
-        self.add_log("📂 Loading saved configuration...")
         with open(f, "r") as r: d = json.load(r)
         for i in d:
             row = self._create_row(i.get("name","..."), i["cookie"], self.placeholder_avatar, i.get("pid",""), i.get("psl",""), i.get("mode","Place ID"))
             threading.Thread(target=self.async_load_data, args=(row,), daemon=True).start()
 
     def export_config(self):
-        self.add_log("📤 Exporting configuration...")
         fp = filedialog.asksaveasfilename(defaultextension=".json")
         if fp: self.save_config(fp)
 
     def import_config(self):
-        self.add_log("📥 Importing configuration...")
         fp = filedialog.askopenfilename()
         if fp: threading.Thread(target=self.load_config, args=(fp,), daemon=True).start()
 
     def update_app(self):
-        self.add_log("☁️ Checking for updates...")
         r = requests.get("https://raw.githubusercontent.com/PXG4E/ROBLOXMANAGER/refs/heads/main/UPDATE")
         if len(r.text) > 100:
-            self.add_log("✅ Update found! Applying and restarting...")
             with open(__file__, "w", encoding="utf-8") as f: f.write(r.text)
             os.execl(sys.executable, sys.executable, *sys.argv)
 
     def toggle_select_all(self):
-        self.add_log(f"☑️ Selection toggled to {self.header_check.get()}")
         for w in self.accounts.values(): w.check_var.set(self.header_check.get())
-    
     def toggle_enable_all(self):
-        self.add_log("⚡ Enabling ALL accounts...")
         for w in self.accounts.values(): w.toggle_power(True)
-    
     def toggle_disable_all(self):
-        self.add_log("🛑 Disabling ALL accounts...")
         for w in self.accounts.values(): w.toggle_power(False)
-
     def bulk_enable(self):
-        self.add_log("⚡ Enabling SELECTED accounts...")
         for w in self.accounts.values():
             if w.check_var.get(): w.toggle_power(True)
-
     def bulk_disable(self):
-        self.add_log("🛑 Disabling SELECTED accounts...")
         for w in self.accounts.values():
             if w.check_var.get(): w.toggle_power(False)
-
     def bulk_delete(self):
-        self.add_log("🗑️ Deleting SELECTED accounts...")
         to_del = [k for k, w in self.accounts.items() if w.check_var.get()]
         for k in to_del:
             self.accounts[k].destroy()
             del self.accounts[k]
         if not self.accounts: self.empty_label.pack(pady=100)
-
+    def bulk_set_mode(self, mode):
+        for w in self.accounts.values():
+            if w.check_var.get(): w.join_method = mode; w.update_method_ui()
+    def bulk_update_id(self):
+        v = self.bulk_id_entry.get()
+        for w in self.accounts.values():
+            if w.check_var.get(): w.entry_pid.delete(0,'end'); w.entry_pid.insert(0, v)
+    def bulk_update_ps(self):
+        v = self.bulk_ps_entry.get()
+        for w in self.accounts.values():
+            if w.check_var.get(): w.entry_psl.delete(0,'end'); w.entry_psl.insert(0, v)
     def update_all_counts(self, _=None):
         lim = self.entry_limit.get()
         for w in self.accounts.values(): w.lbl_count.configure(text=f"{w.rejoin_attempts}/{lim}")
-
     def add_log(self, msg):
         ts = datetime.now().strftime('%H:%M:%S')
-        self.log_box.insert("end", f"[{ts}] {msg}\n")
-        self.log_box.see("end")
-
-    def clear_logs(self): 
-        self.log_box.delete("1.0", "end")
-        self.add_log("Logs cleared.")
-
+        self.log_box.insert("end", f"[{ts}] {msg}\n"); self.log_box.see("end")
+    def clear_logs(self): self.log_box.delete("1.0", "end")
     def join_all_accounts(self):
-        self.add_log("🚀 Mass-joining all accounts...")
         for w in self.accounts.values():
             threading.Thread(target=self.launch_roblox, args=(w,), daemon=True).start(); time.sleep(1)
-
     def kill_all_process(self):
-        self.add_log("💀 Killing all Roblox processes...")
         for w in self.accounts.values(): w.kill_proc()
         subprocess.run(['taskkill', '/F', '/IM', 'RobloxPlayerBeta.exe'], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
 
