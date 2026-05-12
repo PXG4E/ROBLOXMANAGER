@@ -168,6 +168,10 @@ class App(ctk.CTk):
         self.config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
         self.log_path = os.path.join(os.environ['LOCALAPPDATA'], 'Roblox', 'logs')
         
+        # Webhook queuing
+        self.unsent_logs = []
+        self.webhook_lock = threading.Lock()
+
         placeholder = Image.new('RGBA', (32, 32), (0,0,0,0))
         draw = ImageDraw.Draw(placeholder)
         draw.ellipse((0, 0, 31, 31), fill=(40, 40, 40))
@@ -178,6 +182,7 @@ class App(ctk.CTk):
         
         threading.Thread(target=self.multi_instance_unlocker, daemon=True).start()
         threading.Thread(target=self.monitor_loop, daemon=True).start()
+        threading.Thread(target=self.webhook_worker, daemon=True).start()
         self.after(100, self.load_config)
 
     def hide_console(self):
@@ -186,9 +191,8 @@ class App(ctk.CTk):
             if hWnd: ctypes.WinDLL('user32').ShowWindow(hWnd, 0)
 
     def setup_ui(self):
-        self.sidebar = ctk.CTkFrame(self, width=240, fg_color="#0D0D0D", corner_radius=0)
+        self.sidebar = ctk.CTkScrollableFrame(self, width=240, fg_color="#0D0D0D", corner_radius=0)
         self.sidebar.pack(side="left", fill="y")
-        self.sidebar.pack_propagate(False)
 
         logo_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         logo_frame.pack(pady=(20, 30), fill="x")
@@ -207,16 +211,31 @@ class App(ctk.CTk):
         ctk.CTkButton(self.sidebar, text="✕ CLEAR LOGS", fg_color=DARK_BTN, text_color="white", font=("Arial", 11, "bold"), command=self.clear_logs).pack(pady=(0, 20), padx=20, fill="x")
 
         sys_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        sys_frame.pack(fill="x", padx=20, pady=(10, 20))
+        sys_frame.pack(fill="x", padx=20, pady=(10, 15))
         ctk.CTkButton(sys_frame, text="UPDATE VERSION", fg_color="transparent", border_width=1, border_color=YELLOW, text_color=YELLOW, font=("Arial", 11, "bold"), command=self.update_app).pack(fill="x", pady=4)
         ctk.CTkButton(sys_frame, text="⏻ JOIN ALL", fg_color="#0D2028", text_color=CYAN, border_width=1, border_color="#18404B", font=("Arial", 11, "bold"), command=self.join_all_accounts).pack(fill="x", pady=4)
         ctk.CTkButton(sys_frame, text="⊞ ARRANGE WINDOWS", fg_color="transparent", border_width=1, border_color=PURPLE, text_color=PURPLE, font=("Arial", 11, "bold"), command=self.arrange_windows).pack(fill="x", pady=4)
         ctk.CTkButton(sys_frame, text="✕ KILL ALL PROCESS", fg_color="transparent", border_width=1, border_color=RED, text_color=RED, font=("Arial", 11, "bold"), command=self.kill_all_process).pack(fill="x", pady=4)
 
+        # WEBHOOK SETTINGS
+        webhook_frame = ctk.CTkFrame(self.sidebar, fg_color="#151515", corner_radius=8)
+        webhook_frame.pack(fill="x", padx=20, pady=10)
+        ctk.CTkLabel(webhook_frame, text="DISCORD WEBHOOK", font=("Arial", 10, "bold"), text_color=CYAN).pack(pady=(5, 2))
+        
+        self.webhook_url_entry = ctk.CTkEntry(webhook_frame, placeholder_text="Webhook URL", height=28, font=("Arial", 10), fg_color="#0A0A0A")
+        self.webhook_url_entry.pack(fill="x", padx=10, pady=2)
+        
+        self.webhook_interval_entry = ctk.CTkEntry(webhook_frame, placeholder_text="Interval (sec)", height=28, font=("Arial", 10), fg_color="#0A0A0A")
+        self.webhook_interval_entry.pack(fill="x", padx=10, pady=2)
+
+        self.webhook_enabled_var = ctk.BooleanVar(value=False)
+        self.webhook_switch = ctk.CTkSwitch(webhook_frame, text="Enable Webhook", variable=self.webhook_enabled_var, font=("Arial", 10), progress_color=CYAN)
+        self.webhook_switch.pack(pady=8)
+
         rejoin_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         rejoin_frame.pack(fill="x", padx=20, pady=(10, 20))
         ctk.CTkButton(rejoin_frame, text="▷ ENABLE REJOIN ALL", fg_color=GREEN, text_color="black", font=("Arial", 11, "bold"), command=self.toggle_enable_all).pack(fill="x", pady=4)
-        ctk.CTkButton(rejoin_frame, text="✕ DISABLE REJOIN ALL", fg_color=DARK_BTN, text_color=TEXT_GRAY, font=("Arial", 11, "bold"), command=self.toggle_disable_all).pack(fill="x", pady=4)
+        ctk.CTkButton(rejoin_frame, text="✕ DISABLE REJOIN ALL", fg_color=DARK_BTN, text_color="white", font=("Arial", 11, "bold"), command=self.toggle_disable_all).pack(fill="x", pady=4)
 
         bottom_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         bottom_frame.pack(side="bottom", fill="x", padx=20, pady=20)
@@ -281,6 +300,36 @@ class App(ctk.CTk):
         self.log_box = ctk.CTkTextbox(self.main_container, height=140, font=("Consolas", 12), fg_color="#0A0A0A", text_color="#AAAAAA", border_width=1, border_color="#222")
         self.log_box.pack(fill="x", padx=20, pady=(10, 20))
         self.add_log("WELCOME TO OUR HUB ROBLOX MANAGER")
+
+    def webhook_worker(self):
+        while True:
+            try:
+                if self.webhook_enabled_var.get():
+                    url = self.webhook_url_entry.get().strip()
+                    raw_iv = self.webhook_interval_entry.get().strip()
+                    interval = int(raw_iv) if (raw_iv.isdigit() and int(raw_iv) > 0) else 30
+                    
+                    with self.webhook_lock:
+                        if self.unsent_logs and url.startswith("http"):
+                            batch = "\n".join(self.unsent_logs)
+                            if len(batch) > 1900: batch = batch[:1900] + "..."
+                            
+                            payload = {
+                                "embeds": [{
+                                    "title": "Roblox Manager Updates",
+                                    "description": f"```\n{batch}\n```",
+                                    "color": 524287,
+                                    "footer": {"text": "PXG Hub Manager Output"}
+                                }]
+                            }
+                            resp = requests.post(url, json=payload, timeout=10)
+                            if resp.status_code in [200, 204]:
+                                self.unsent_logs.clear()
+                else:
+                    interval = 5
+            except:
+                interval = 10
+            time.sleep(interval)
 
     def async_load_data(self, row_obj):
         try:
@@ -408,21 +457,38 @@ class App(ctk.CTk):
         if not HAS_WIN32: return
         self.add_log("⊞ Arranging all Roblox windows...")
         wins = []
-        win32gui.EnumWindows(lambda h, _: wins.append(h) if win32gui.IsWindowVisible(h) and "Roblox" in win32gui.GetWindowText(h) else None, None)
+        def enum_handler(h, _):
+            if win32gui.IsWindowVisible(h):
+                text = win32gui.GetWindowText(h)
+                if "Roblox" in text and "Manager" not in text:
+                    wins.append(h)
+        win32gui.EnumWindows(enum_handler, None)
         sw, size = win32api.GetSystemMetrics(0), 188
         cols = sw // size
         for i, h in enumerate(wins): win32gui.SetWindowPos(h, win32con.HWND_TOP, (i%cols)*size, (i//cols)*size, size, size, win32con.SWP_SHOWWINDOW)
 
     def save_config(self, m=None):
-        d = [{"name": w.lbl_name.cget("text"), "cookie": w.cookie, "pid": w.entry_pid.get(), "psl": w.entry_psl.get(), "mode": w.join_method} for w in self.accounts.values()]
-        with open(m if m else self.config_file, "w") as f: json.dump(d, f, indent=4)
+        accs = [{"name": w.lbl_name.cget("text"), "cookie": w.cookie, "pid": w.entry_pid.get(), "psl": w.entry_psl.get(), "mode": w.join_method} for w in self.accounts.values()]
+        full_config = {
+            "accounts": accs,
+            "webhook_url": self.webhook_url_entry.get(),
+            "webhook_interval": self.webhook_interval_entry.get(),
+            "webhook_enabled": self.webhook_enabled_var.get()
+        }
+        with open(m if m else self.config_file, "w") as f: json.dump(full_config, f, indent=4)
         self.add_log("💾 Saved.")
 
     def load_config(self, m=None):
         f = m if m else self.config_file
         if not os.path.exists(f): return
-        with open(f, "r") as r: d = json.load(r)
-        for i in d:
+        with open(f, "r") as r: data = json.load(r)
+        if isinstance(data, dict):
+            acc_list = data.get("accounts", [])
+            self.webhook_url_entry.insert(0, data.get("webhook_url", ""))
+            self.webhook_interval_entry.insert(0, data.get("webhook_interval", ""))
+            self.webhook_enabled_var.set(data.get("webhook_enabled", False))
+        else: acc_list = data
+        for i in acc_list:
             row = self._create_row(i.get("name","..."), i["cookie"], self.placeholder_avatar, i.get("pid",""), i.get("psl",""), i.get("mode","Place ID"))
             threading.Thread(target=self.async_load_data, args=(row,), daemon=True).start()
 
@@ -437,6 +503,14 @@ class App(ctk.CTk):
     def update_app(self):
         r = requests.get("https://raw.githubusercontent.com/PXG4E/ROBLOXMANAGER/refs/heads/main/UPDATE")
         if len(r.text) > 100:
+            try:
+                with open(__file__, "r", encoding="utf-8") as f:
+                    current_code = f.read()
+                if r.text.strip() == current_code.strip():
+                    messagebox.showinfo("Update", "This is the latest version.")
+                    return
+            except: pass
+            
             with open(__file__, "w", encoding="utf-8") as f: f.write(r.text)
             os.execl(sys.executable, sys.executable, *sys.argv)
 
@@ -471,7 +545,9 @@ class App(ctk.CTk):
         for w in self.accounts.values(): w.lbl_count.configure(text=f"{w.rejoin_attempts}/{lim}")
     def add_log(self, msg):
         ts = datetime.now().strftime('%H:%M:%S')
-        self.log_box.insert("end", f"[{ts}] {msg}\n"); self.log_box.see("end")
+        full_msg = f"[{ts}] {msg}"
+        self.log_box.insert("end", f"{full_msg}\n"); self.log_box.see("end")
+        with self.webhook_lock: self.unsent_logs.append(full_msg)
     def clear_logs(self): self.log_box.delete("1.0", "end")
     def join_all_accounts(self):
         for w in self.accounts.values():
