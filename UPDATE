@@ -155,7 +155,7 @@ class AccountRow(ctk.CTkFrame):
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Roblox Manager v1.0")
+        self.title("Roblox Manager v1.0 (RELEASE)")
         self.geometry("1500x850")
         self.configure(fg_color=BG_COLOR)
         
