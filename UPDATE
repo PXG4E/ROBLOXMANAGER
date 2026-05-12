@@ -144,6 +144,9 @@ class AccountRow(ctk.CTkFrame):
         if self.pid:
             try: psutil.Process(self.pid).kill()
             except: pass
+            # Clean up log mapping when killed
+            if self.pid in self.app.log_map:
+                del self.app.log_map[self.pid]
             self.pid = None
         self.app.add_log(f"💀 Force killed process for {self.account_name}")
         self.lbl_event.configure(text="Killed.")
@@ -165,6 +168,7 @@ class App(ctk.CTk):
             except: pass
 
         self.accounts = {}
+        self.log_map = {} # Maps PID -> Log File Path
         self.config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
         self.log_path = os.path.join(os.environ['LOCALAPPDATA'], 'Roblox', 'logs')
         
@@ -374,6 +378,8 @@ class App(ctk.CTk):
     def remove_account(self, key):
         if key in self.accounts:
             name = self.accounts[key].account_name
+            if self.accounts[key].pid in self.log_map:
+                del self.log_map[self.accounts[key].pid]
             self.accounts[key].destroy()
             del self.accounts[key]
             self.add_log(f"🗑️ Removed {name} from list.")
@@ -416,30 +422,64 @@ class App(ctk.CTk):
         while True:
             aps = {p.pid: p.name() for p in psutil.process_iter(['name']) if "RobloxPlayerBeta" in p.info['name']}
             lim = int(self.entry_limit.get() if self.entry_limit.get().isdigit() else 0)
+            
+            # Clean up log_map for processes that no longer exist
+            active_pids = list(aps.keys())
+            self.log_map = {pid: path for pid, path in self.log_map.items() if pid in active_pids}
+
             for n, w in self.accounts.items():
                 run = False
                 if w.pid and w.pid in aps:
                     run = True; w.lbl_event.configure(text="Connected.")
                     if w.rejoin_attempts > 0: w.rejoin_attempts = 0; self.update_all_counts()
-                    if self.check_disconnect_in_logs(w.pid): self.add_log(f"⚠️ DC: {w.account_name}"); w.kill_proc(); run = False
+                    if self.check_disconnect_in_logs(w.pid): 
+                        self.add_log(f"⚠️ DC Detected for {w.account_name}")
+                        w.kill_proc()
+                        run = False
                 else:
+                    # Try to find a new process that isn't already assigned
                     for pid in aps:
-                        if pid not in [acc.pid for acc in self.accounts.values() if acc.pid]: w.pid = pid; run = True; break
+                        if pid not in [acc.pid for acc in self.accounts.values() if acc.pid]: 
+                            w.pid = pid
+                            run = True
+                            break
                 
                 w.lbl_status.configure(text="ONLINE" if run else "OFFLINE", text_color=GREEN if run else RED)
                 w.status_circle.configure(text_color=GREEN if run else RED)
 
                 if not w.is_account_on: continue
                 if not run and w.rejoin_attempts < lim:
-                    if self.launch_roblox(w): w.rejoin_attempts += 1; self.update_all_counts(); time.sleep(12)
+                    if self.launch_roblox(w): 
+                        w.rejoin_attempts += 1
+                        self.update_all_counts()
+                        time.sleep(12)
             time.sleep(5)
 
     def check_disconnect_in_logs(self, pid):
         try:
-            fs = glob.glob(os.path.join(self.log_path, '*Player*'))
-            with open(max(fs, key=os.path.getctime), 'r', encoding='utf-8', errors='ignore') as f:
-                c = f.read().lower(); return any(k in c for k in ["same account launched", "connection lost", "error code: 264"])
-        except: return False
+            # 1. Map PID to its specific log file if not already mapped
+            if pid not in self.log_map:
+                fs = glob.glob(os.path.join(self.log_path, '*Player*'))
+                fs.sort(key=os.path.getmtime, reverse=True)
+                for fpath in fs[:15]: # Check only 15 most recent logs
+                    try:
+                        with open(fpath, 'r', encoding='utf-8', errors='ignore') as f:
+                            header = f.read(1000) 
+                            if f"Process ID: {pid}" in header:
+                                self.log_map[pid] = fpath
+                                break
+                    except: continue
+
+            # 2. Check the specific log file for this PID
+            target_file = self.log_map.get(pid)
+            if target_file and os.path.exists(target_file):
+                with open(target_file, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read().lower()
+                    discon_keywords = ["same account launched", "connection lost", "error code: 264", "kick"]
+                    if any(k in content for k in discon_keywords):
+                        return True
+        except: pass
+        return False
 
     def close_roblox_handle(self):
         try:
