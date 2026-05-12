@@ -2,7 +2,7 @@ import os, sys, ctypes, time, threading, subprocess, psutil, requests, glob, jso
 import customtkinter as ctk
 from PIL import Image, ImageTk, ImageDraw
 from datetime import datetime
-from tkinter import filedialog
+from tkinter import filedialog, messagebox # Added messagebox for the popup
 
 # Attempt win32 imports for Arrange Windows
 try:
@@ -23,7 +23,6 @@ if not is_admin():
     ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, f'"{script_path}"', None, 1)
     sys.exit()
 
-# NEW: Automatically convert logo.png to logo.ico for Windows Taskbar/Top Bar
 def prepare_icons():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     png_path = os.path.join(script_dir, "logo.png")
@@ -35,7 +34,6 @@ def prepare_icons():
             img.save(ico_path, format='ICO', sizes=[(256, 256), (128, 128), (64, 64), (32, 32), (16, 16)])
         except: pass
     
-    # Force Taskbar to show the custom icon
     if sys.platform == "win32":
         try:
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('pxg.hub.rbx.manager.v4.8')
@@ -66,14 +64,12 @@ class AccountRow(ctk.CTkFrame):
         self.is_account_on = False 
         self.join_method = mode 
         
-        # Configure Grid for scaling (Column 4 - PS Link stretches)
         self.grid_columnconfigure(4, weight=1)
 
         self.check_var = ctk.BooleanVar(value=False)
         self.cb_select = ctk.CTkCheckBox(self, text="", variable=self.check_var, width=30, fg_color=CYAN, border_color="#333", hover_color="#00A3B4")
         self.cb_select.grid(row=0, column=0, padx=(10, 5), pady=5)
 
-        # Avatar & Name
         self.info_frame = ctk.CTkFrame(self, fg_color="transparent", width=150)
         self.info_frame.grid(row=0, column=1, padx=5, sticky="w")
         self.img_label = ctk.CTkLabel(self.info_frame, text="", image=avatar_img)
@@ -81,11 +77,9 @@ class AccountRow(ctk.CTkFrame):
         self.lbl_name = ctk.CTkLabel(self.info_frame, text=name, font=("Consolas", 11, "bold"), text_color="#DDDDDD", anchor="w")
         self.lbl_name.pack(side="left")
         
-        # Method Button
         self.btn_method = ctk.CTkButton(self, text="MODE: ID", width=85, height=26, font=("Arial", 10, "bold"), command=self.toggle_method)
         self.btn_method.grid(row=0, column=2, padx=5)
 
-        # Input Boxes
         self.entry_pid = ctk.CTkEntry(self, placeholder_text="ID", width=70, fg_color="#151515", border_color="#333", font=("Arial", 10))
         self.entry_pid.insert(0, pid)
         self.entry_pid.grid(row=0, column=3, padx=2)
@@ -94,7 +88,6 @@ class AccountRow(ctk.CTkFrame):
         self.entry_psl.insert(0, psl)
         self.entry_psl.grid(row=0, column=4, padx=2, sticky="ew")
 
-        # Status
         self.status_frame = ctk.CTkFrame(self, fg_color="transparent", width=80)
         self.status_frame.grid(row=0, column=5, padx=5)
         self.status_circle = ctk.CTkLabel(self.status_frame, text="●", text_color="gray", width=15)
@@ -108,7 +101,6 @@ class AccountRow(ctk.CTkFrame):
         self.lbl_count = ctk.CTkLabel(self, text=f"0/{self.app.entry_limit.get()}", width=50, font=("Consolas", 11))
         self.lbl_count.grid(row=0, column=7, padx=5)
 
-        # Actions
         self.action_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.action_frame.grid(row=0, column=8, padx=5, sticky="e")
         
@@ -189,7 +181,6 @@ class App(ctk.CTk):
             if hWnd: ctypes.WinDLL('user32').ShowWindow(hWnd, 0)
 
     def setup_ui(self):
-        # Sidebar (Fixed Width)
         self.sidebar = ctk.CTkFrame(self, width=240, fg_color="#0D0D0D", corner_radius=0)
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
@@ -200,7 +191,6 @@ class App(ctk.CTk):
         script_dir = os.path.dirname(os.path.abspath(__file__))
         png_path = os.path.join(script_dir, "logo.png")
         if os.path.exists(png_path):
-            # FIXED: Blurry logo fix using proper CTkImage scaling
             img_obj = Image.open(png_path)
             my_logo = ctk.CTkImage(light_image=img_obj, dark_image=img_obj, size=(90, 90))
             ctk.CTkLabel(logo_frame, text="", image=my_logo).pack()
@@ -223,7 +213,6 @@ class App(ctk.CTk):
         ctk.CTkButton(rejoin_frame, text="▷ ENABLE REJOIN ALL", fg_color=GREEN, text_color="black", font=("Arial", 11, "bold"), command=self.toggle_enable_all).pack(fill="x", pady=4)
         ctk.CTkButton(rejoin_frame, text="✕ DISABLE REJOIN ALL", fg_color=DARK_BTN, text_color=TEXT_GRAY, font=("Arial", 11, "bold"), command=self.toggle_disable_all).pack(fill="x", pady=4)
 
-        # Footer
         bottom_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         bottom_frame.pack(side="bottom", fill="x", padx=20, pady=20)
         ctk.CTkButton(bottom_frame, text="💾 SAVE CONFIG", fg_color="transparent", border_color=CYAN, border_width=1, text_color=CYAN, font=("Arial", 11, "bold"), command=self.save_config).pack(fill="x", pady=5)
@@ -232,18 +221,16 @@ class App(ctk.CTk):
         ctk.CTkButton(ex_im, text="EXPORT", fg_color=DARK_BTN, width=85, font=("Arial", 9, "bold"), command=self.export_config).pack(side="left")
         ctk.CTkButton(ex_im, text="IMPORT", fg_color=DARK_BTN, width=85, font=("Arial", 9, "bold"), command=self.import_config).pack(side="right")
 
-        # Main Dynamic Area
         self.main_container = ctk.CTkFrame(self, fg_color="transparent")
         self.main_container.pack(side="right", fill="both", expand=True)
 
-        # Responsive Action Bar
         self.action_bar = ctk.CTkFrame(self.main_container, height=65, fg_color=PANEL_COLOR, corner_radius=0)
         self.action_bar.pack(side="top", fill="x", padx=20, pady=(20, 10))
         
         self.left_actions = ctk.CTkFrame(self.action_bar, fg_color="transparent")
         self.left_actions.pack(side="left", fill="both", expand=True)
 
-        ctk.CTkLabel(self.left_actions, text="APPLY TO SELECTED:", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=(10, 2))
+        ctk.CTkLabel(self.left_actions, text="SET:", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=(10, 2))
         ctk.CTkButton(self.left_actions, text="ID MODE", width=70, height=26, fg_color=CYAN, text_color="black", font=("Arial", 10, "bold"), command=lambda: self.bulk_set_mode("Place ID")).pack(side="left", padx=2)
         ctk.CTkButton(self.left_actions, text="PS MODE", width=70, height=26, fg_color=PURPLE, text_color="white", font=("Arial", 10, "bold"), command=lambda: self.bulk_set_mode("Private Server")).pack(side="left", padx=2)
 
@@ -267,7 +254,6 @@ class App(ctk.CTk):
         self.entry_limit.pack(side="right", padx=5)
         ctk.CTkLabel(self.right_actions, text="RETRY LIMIT:", font=("Arial", 10), text_color=TEXT_GRAY).pack(side="right")
 
-        # Responsive Dashboard
         self.dash_wrapper = ctk.CTkFrame(self.main_container, fg_color=PANEL_COLOR, corner_radius=10)
         self.dash_wrapper.pack(side="top", fill="both", expand=True, padx=20, pady=10)
         
@@ -291,9 +277,6 @@ class App(ctk.CTk):
         self.log_box.pack(fill="x", padx=20, pady=(10, 20))
         self.add_log("WELCOME TO OUR HUB ROBLOX MANAGER")
 
-    # ==========================================
-    # LOGIC
-    # ==========================================
     def async_load_data(self, row_obj):
         try:
             h = {"Cookie": f".ROBLOSECURITY={row_obj.cookie}"}
@@ -309,7 +292,6 @@ class App(ctk.CTk):
     def _update_row_ui(self, row, name, img):
         row.lbl_name.configure(text=name)
         row.img_label.configure(image=img)
-        # FIXED: Update account_name so logs show the real name instead of "Loading..."
         row.account_name = name
 
     def bulk_add_popup(self):
@@ -332,17 +314,39 @@ class App(ctk.CTk):
         self.accounts[str(time.time()) + name] = row
         return row
 
+    # --- UPDATED JOIN LOGIC WITH FORMAT VALIDATION & ERROR POPUP ---
     def launch_roblox(self, w):
+        self.add_log(f"🚀 Initializing launch for {w.account_name}...")
         ticket = self.get_auth_ticket(w.cookie)
-        if not ticket: return False
+        if not ticket: 
+            self.add_log(f"❌ Failed to get Auth Ticket for {w.account_name}")
+            return False
+        
         if w.join_method == "Private Server":
-            link = w.entry_psl.get()
-            lc = re.search(r"linkCode=([\w-]+)", link).group(1) if "linkCode=" in link else link
-            pid = re.search(r"games/(\d+)", link).group(1) if "games/" in link else "0"
+            link = w.entry_psl.get().strip()
+            
+            # Format Regex Check
+            format_regex = r"roblox\.com/games/\d+/.+\?privateServerLinkCode=[\w-]+"
+            if not re.search(format_regex, link):
+                self.add_log(f"❌ Format mismatch for {w.account_name}.")
+                # SHOW ERROR POPUP
+                messagebox.showwarning(
+                    "Format Mismatch", 
+                    "Private Server Link Mismatch Please Use This Format\n"
+                    "https://www.roblox.com/games/PLACE ID/GAME NAME?privateServerLinkCode=1234567890\n"
+                    "To Get This Format You Have To Paste Your Link In Your browser And Wait For The Correct Link"
+                )
+                return False
+
+            lc = re.search(r"privateServerLinkCode=([\w-]+)", link).group(1)
+            pid = re.search(r"games/(\d+)", link).group(1)
+            
+            # Use RequestPrivateGame protocol
             lurl = f"https%3A%2F%2Fassetgame.roblox.com%2Fgame%2FPlaceLauncher.ashx%3Frequest%3DRequestPrivateGame%26browserTrackerId%3D{int(time.time())}%26placeId%3D{pid}%26linkCode%3D{lc}"
         else:
-            pid = w.entry_pid.get()
+            pid = w.entry_pid.get().strip()
             lurl = f"https%3A%2F%2Fassetgame.roblox.com%2Fgame%2FPlaceLauncher.ashx%3Frequest%3DRequestGame%26browserTrackerId%3D{int(time.time())}%26placeId%3D{pid}%26isReadOnly%3Dfalse"
+        
         self.close_roblox_handle()
         subprocess.Popen(f"start roblox-player:1+launchmode:play+gameinfo:{ticket}+placelauncherurl:{lurl}", shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
         return True
@@ -361,7 +365,6 @@ class App(ctk.CTk):
             aps = {p.pid: p.name() for p in psutil.process_iter(['name']) if "RobloxPlayerBeta" in p.info['name']}
             lim = int(self.entry_limit.get() if self.entry_limit.get().isdigit() else 0)
             for n, w in self.accounts.items():
-                # FIXED: Detection now runs even if Rejoin Switch is OFF
                 run = False
                 if w.pid and w.pid in aps:
                     run = True; w.lbl_event.configure(text="Connected.")
@@ -374,7 +377,6 @@ class App(ctk.CTk):
                 w.lbl_status.configure(text="ONLINE" if run else "OFFLINE", text_color=GREEN if run else RED)
                 w.status_circle.configure(text_color=GREEN if run else RED)
 
-                # Rejoin only if switch is ON
                 if not w.is_account_on: continue
                 if not run and w.rejoin_attempts < lim:
                     if self.launch_roblox(w): w.rejoin_attempts += 1; self.update_all_counts(); time.sleep(12)
@@ -426,7 +428,7 @@ class App(ctk.CTk):
 
     def import_config(self):
         fp = filedialog.askopenfilename()
-        if fp: threading.Thread(target=self.load_config, args=(fp,), daemon=True).start()
+        if fp: self.load_config(fp)
 
     def update_app(self):
         r = requests.get("https://raw.githubusercontent.com/PXG4E/ROBLOXMANAGER/refs/heads/main/UPDATE")
