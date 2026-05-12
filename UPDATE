@@ -208,7 +208,7 @@ class App(ctk.CTk):
 
         sys_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         sys_frame.pack(fill="x", padx=20, pady=(10, 20))
-        ctk.CTkButton(sys_frame, text="UPDATE '1.0'", fg_color="transparent", border_width=1, border_color=YELLOW, text_color=YELLOW, font=("Arial", 11, "bold"), command=self.update_app).pack(fill="x", pady=4)
+        ctk.CTkButton(sys_frame, text="UPDATE VERSION", fg_color="transparent", border_width=1, border_color=YELLOW, text_color=YELLOW, font=("Arial", 11, "bold"), command=self.update_app).pack(fill="x", pady=4)
         ctk.CTkButton(sys_frame, text="⏻ JOIN ALL", fg_color="#0D2028", text_color=CYAN, border_width=1, border_color="#18404B", font=("Arial", 11, "bold"), command=self.join_all_accounts).pack(fill="x", pady=4)
         ctk.CTkButton(sys_frame, text="⊞ ARRANGE WINDOWS", fg_color="transparent", border_width=1, border_color=PURPLE, text_color=PURPLE, font=("Arial", 11, "bold"), command=self.arrange_windows).pack(fill="x", pady=4)
         ctk.CTkButton(sys_frame, text="✕ KILL ALL PROCESS", fg_color="transparent", border_width=1, border_color=RED, text_color=RED, font=("Arial", 11, "bold"), command=self.kill_all_process).pack(fill="x", pady=4)
