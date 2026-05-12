@@ -23,6 +23,7 @@ if not is_admin():
     ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, f'"{script_path}"', None, 1)
     sys.exit()
 
+# NEW: Automatically convert logo.png to logo.ico for Windows Taskbar/Top Bar
 def prepare_icons():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     png_path = os.path.join(script_dir, "logo.png")
@@ -34,6 +35,7 @@ def prepare_icons():
             img.save(ico_path, format='ICO', sizes=[(256, 256), (128, 128), (64, 64), (32, 32), (16, 16)])
         except: pass
     
+    # Force Taskbar to show the custom icon
     if sys.platform == "win32":
         try:
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('pxg.hub.rbx.manager.v4.8')
@@ -198,7 +200,9 @@ class App(ctk.CTk):
         script_dir = os.path.dirname(os.path.abspath(__file__))
         png_path = os.path.join(script_dir, "logo.png")
         if os.path.exists(png_path):
-            my_logo = ctk.CTkImage(Image.open(png_path), size=(90, 90))
+            # FIXED: Blurry logo fix using proper CTkImage scaling
+            img_obj = Image.open(png_path)
+            my_logo = ctk.CTkImage(light_image=img_obj, dark_image=img_obj, size=(90, 90))
             ctk.CTkLabel(logo_frame, text="", image=my_logo).pack()
         
         ctk.CTkLabel(logo_frame, text="PXG HUB", font=("Arial", 16, "bold"), text_color="white").pack(pady=(5,0))
@@ -222,7 +226,7 @@ class App(ctk.CTk):
         # Footer
         bottom_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         bottom_frame.pack(side="bottom", fill="x", padx=20, pady=20)
-        ctk.CTkButton(bottom_frame, text="💾 SAVE CONFIG", fg_color="transparent", border_width=1, border_color=CYAN, text_color=CYAN, font=("Arial", 11, "bold"), command=self.save_config).pack(fill="x", pady=5)
+        ctk.CTkButton(bottom_frame, text="💾 SAVE CONFIG", fg_color="transparent", border_color=CYAN, border_width=1, text_color=CYAN, font=("Arial", 11, "bold"), command=self.save_config).pack(fill="x", pady=5)
         ex_im = ctk.CTkFrame(bottom_frame, fg_color="transparent")
         ex_im.pack(fill="x")
         ctk.CTkButton(ex_im, text="EXPORT", fg_color=DARK_BTN, width=85, font=("Arial", 9, "bold"), command=self.export_config).pack(side="left")
@@ -239,7 +243,7 @@ class App(ctk.CTk):
         self.left_actions = ctk.CTkFrame(self.action_bar, fg_color="transparent")
         self.left_actions.pack(side="left", fill="both", expand=True)
 
-        ctk.CTkLabel(self.left_actions, text="SET:", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=(10, 2))
+        ctk.CTkLabel(self.left_actions, text="APPLY TO SELECTED:", font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=(10, 2))
         ctk.CTkButton(self.left_actions, text="ID MODE", width=70, height=26, fg_color=CYAN, text_color="black", font=("Arial", 10, "bold"), command=lambda: self.bulk_set_mode("Place ID")).pack(side="left", padx=2)
         ctk.CTkButton(self.left_actions, text="PS MODE", width=70, height=26, fg_color=PURPLE, text_color="white", font=("Arial", 10, "bold"), command=lambda: self.bulk_set_mode("Private Server")).pack(side="left", padx=2)
 
@@ -288,7 +292,7 @@ class App(ctk.CTk):
         self.add_log("WELCOME TO OUR HUB ROBLOX MANAGER")
 
     # ==========================================
-    # LOGIC (UNCHANGED)
+    # LOGIC
     # ==========================================
     def async_load_data(self, row_obj):
         try:
@@ -305,6 +309,8 @@ class App(ctk.CTk):
     def _update_row_ui(self, row, name, img):
         row.lbl_name.configure(text=name)
         row.img_label.configure(image=img)
+        # FIXED: Update account_name so logs show the real name instead of "Loading..."
+        row.account_name = name
 
     def bulk_add_popup(self):
         pop = ctk.CTkToplevel(self); pop.title("Bulk Paste"); pop.geometry("500x450"); pop.attributes('-topmost', True)
@@ -355,7 +361,7 @@ class App(ctk.CTk):
             aps = {p.pid: p.name() for p in psutil.process_iter(['name']) if "RobloxPlayerBeta" in p.info['name']}
             lim = int(self.entry_limit.get() if self.entry_limit.get().isdigit() else 0)
             for n, w in self.accounts.items():
-                if not w.is_account_on: continue
+                # FIXED: Detection now runs even if Rejoin Switch is OFF
                 run = False
                 if w.pid and w.pid in aps:
                     run = True; w.lbl_event.configure(text="Connected.")
@@ -364,8 +370,12 @@ class App(ctk.CTk):
                 else:
                     for pid in aps:
                         if pid not in [acc.pid for acc in self.accounts.values() if acc.pid]: w.pid = pid; run = True; break
+                
                 w.lbl_status.configure(text="ONLINE" if run else "OFFLINE", text_color=GREEN if run else RED)
                 w.status_circle.configure(text_color=GREEN if run else RED)
+
+                # Rejoin only if switch is ON
+                if not w.is_account_on: continue
                 if not run and w.rejoin_attempts < lim:
                     if self.launch_roblox(w): w.rejoin_attempts += 1; self.update_all_counts(); time.sleep(12)
             time.sleep(5)
