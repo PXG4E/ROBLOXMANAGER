@@ -3,18 +3,17 @@ import customtkinter as ctk
 from PIL import Image, ImageTk, ImageDraw
 from datetime import datetime
 from tkinter import filedialog, messagebox
+import tkinter as _tk
 
 # --- PYFONTS INTEGRATION ---
 try:
     from pyfonts import load_google_font
-    # We load the font; pyfonts registers it with the system for the session
     acme_font_res = load_google_font("Acme")
     FONT_NAME = "Acme"
 except Exception:
-    FONT_NAME = "Arial" # Fallback
+    FONT_NAME = "Arial"
 # ---------------------------
 
-# Attempt win32 imports for Arrange Windows
 try:
     import win32gui, win32con, win32api
     HAS_WIN32 = True
@@ -37,13 +36,11 @@ def prepare_icons():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     png_path = os.path.join(script_dir, "logo.png")
     ico_path = os.path.join(script_dir, "logo.ico")
-    
     if os.path.exists(png_path) and not os.path.exists(ico_path):
         try:
             img = Image.open(png_path)
             img.save(ico_path, format='ICO', sizes=[(256, 256), (128, 128), (64, 64), (32, 32), (16, 16)])
         except: pass
-    
     if sys.platform == "win32":
         try:
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('pxg.hub.rbx.manager.v4.8')
@@ -52,7 +49,6 @@ def prepare_icons():
 
 ctk.set_appearance_mode("Dark")
 
-# UI Constants
 BG_COLOR = "#0A0A0A"
 PANEL_COLOR = "#111111"
 CYAN = "#00E5FF"
@@ -66,7 +62,6 @@ TEXT_GRAY = "#666666"
 # ==========================================
 # 2. DISCONNECT DETECTION CONSTANTS
 # ==========================================
-
 ROBLOX_LOG_GLOBS = ['*Player*.log', '*Player*.txt', '*player*', 'log_*.txt', '*.log']
 
 DISCONNECT_PATTERNS = [
@@ -101,6 +96,32 @@ PID_POLL_INTERVAL = 0.5
 PID_POLL_ATTEMPTS = 40
 
 
+class ToolTip:
+    def __init__(self, widget, get_text):
+        self.widget = widget
+        self.get_text = get_text
+        self.tip_window = None
+        widget.bind("<Enter>", self.show_tip)
+        widget.bind("<Leave>", self.hide_tip)
+
+    def show_tip(self, event=None):
+        text = self.get_text()
+        if not text or self.tip_window:
+            return
+        x = self.widget.winfo_rootx() + 25
+        y = self.widget.winfo_rooty() + 20
+        self.tip_window = tw = _tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{x}+{y}")
+        _tk.Label(tw, text=text, background="#1A1A1A", foreground=CYAN,
+                  font=(FONT_NAME, 11), relief="flat", padx=6, pady=3).pack()
+
+    def hide_tip(self, event=None):
+        if self.tip_window:
+            self.tip_window.destroy()
+            self.tip_window = None
+
+
 class AccountRow(ctk.CTkFrame):
     def __init__(self, master, name, cookie, pid, psl, avatar_img, app_ref, mode="Place ID", **kwargs):
         super().__init__(master, fg_color="transparent", **kwargs)
@@ -117,26 +138,31 @@ class AccountRow(ctk.CTkFrame):
         self._last_presence = None
         self._last_dc_time = 0.0
 
-        # column 1 is the account info; minsize ensures the MODE button is always aligned
         self.grid_columnconfigure(1, minsize=220)
-        self.grid_columnconfigure(4, weight=1)
+        self.grid_columnconfigure(4, weight=0)
 
         self.check_var = ctk.BooleanVar(value=False)
         self.cb_select = ctk.CTkCheckBox(self, text="", variable=self.check_var, width=30, fg_color=CYAN, border_color="#333", hover_color="#00A3B4")
         self.cb_select.grid(row=0, column=0, padx=(10, 5), pady=10)
 
-        # Container for Avatar + Name with strict fixed width to keep buttons aligned
         self.info_frame = ctk.CTkFrame(self, fg_color="transparent", width=210, height=40)
         self.info_frame.grid(row=0, column=1, padx=5, sticky="w")
         self.info_frame.grid_propagate(False)
-        
+
         self.img_label = ctk.CTkLabel(self.info_frame, text="", image=avatar_img)
         self.img_label.pack(side="left", padx=(0, 5))
-        
-        # Truncate at 10 chars to ensure it fits the Acme font width in the container
-        display_name = (name[:10] + '...') if len(name) > 11 else name
+
+        display_name = (name[:14] + '...') if len(name) > 14 else name
         self.lbl_name = ctk.CTkLabel(self.info_frame, text=display_name, font=(FONT_NAME, 14, "bold"), text_color="#DDDDDD", anchor="w")
         self.lbl_name.pack(side="left")
+
+        self.btn_copy = ctk.CTkButton(
+            self.info_frame, text="📋", width=22, height=22,
+            fg_color="transparent", hover_color="#222222",
+            font=(FONT_NAME, 11), command=self._copy_name
+        )
+        self.btn_copy.pack(side="left", padx=(2, 0))
+        self._tooltip = ToolTip(self.lbl_name, lambda: self.account_name)
 
         self.btn_method = ctk.CTkButton(self, text="MODE: ID", width=95, height=34, font=(FONT_NAME, 12, "bold"), command=self.toggle_method)
         self.btn_method.grid(row=0, column=2, padx=5)
@@ -145,9 +171,9 @@ class AccountRow(ctk.CTkFrame):
         self.entry_pid.insert(0, pid)
         self.entry_pid.grid(row=0, column=3, padx=2)
 
-        self.entry_psl = ctk.CTkEntry(self, placeholder_text="Private Link", height=34, fg_color="#151515", border_color="#333", font=(FONT_NAME, 12))
+        self.entry_psl = ctk.CTkEntry(self, placeholder_text="Private Link", width=150, height=34, fg_color="#151515", border_color="#333", font=(FONT_NAME, 12))
         self.entry_psl.insert(0, psl)
-        self.entry_psl.grid(row=0, column=4, padx=2, sticky="ew")
+        self.entry_psl.grid(row=0, column=4, padx=2)
 
         self.status_frame = ctk.CTkFrame(self, fg_color="transparent", width=100)
         self.status_frame.grid(row=0, column=5, padx=5)
@@ -217,12 +243,18 @@ class AccountRow(ctk.CTkFrame):
     def remove_me(self):
         self.app.remove_account(self.row_key)
 
+    def _copy_name(self):
+        self.clipboard_clear()
+        self.clipboard_append(self.account_name)
+        self.app.add_log(f"📋 Copied name: {self.account_name}")
+
 
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Roblox Manager v1.0")
+        self.title("Roblox Manager v1.0 (RELEASE)")
         self.geometry("1500x850")
+        self.minsize(900, 600)
         self.configure(fg_color=BG_COLOR)
 
         ico = prepare_icons()
@@ -235,6 +267,7 @@ class App(ctk.CTk):
         self.accounts = {}
         self.log_map = {}
         self._log_map_lock = threading.Lock()
+        self._launch_lock = threading.Lock()  # ensures only one Roblox launches at a time
 
         self.config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
         self.log_path = os.path.join(os.environ['LOCALAPPDATA'], 'Roblox', 'logs')
@@ -249,19 +282,28 @@ class App(ctk.CTk):
         draw.ellipse((0, 0, 31, 31), fill=(40, 40, 40))
         self.placeholder_avatar = ctk.CTkImage(placeholder, size=(32, 32))
 
+        self.minsize(900, 600)
+        self._last_resize_width = 1500
+
         self.setup_ui()
         self.after(500, self.hide_console)
+        self.bind("<Configure>", self._on_resize)
 
         threading.Thread(target=self.multi_instance_unlocker, daemon=True).start()
         threading.Thread(target=self.monitor_loop, daemon=True).start()
         threading.Thread(target=self.webhook_worker, daemon=True).start()
         self.after(100, self.load_config)
-        self.update_clock() 
+        self.update_clock()
 
     def update_clock(self):
         now = datetime.now().strftime("%H:%M:%S | %d/%m/%Y")
         self.lbl_clock.configure(text=now)
         self.after(1000, self.update_clock)
+
+    def _on_resize(self, event=None):
+        if event and event.widget is not self:
+            return
+        self._last_resize_width = self.winfo_width()
 
     def hide_console(self):
         if sys.platform == "win32" and sys.argv[0].endswith('.pyw'):
@@ -350,7 +392,6 @@ class App(ctk.CTk):
         self.header_check = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(col_headers, text="", variable=self.header_check, width=30, fg_color=CYAN,
                         command=self.toggle_select_all).pack(side="left", padx=(10, 5))
-        # Account header matches minsize of info_frame
         ctk.CTkLabel(col_headers, text="ACCOUNT", width=220, anchor="w",
                      font=(FONT_NAME, 14, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
         ctk.CTkLabel(col_headers, text="JOINING METHOD (PLACE ID & PS LINK)", width=430, anchor="w",
@@ -361,8 +402,26 @@ class App(ctk.CTk):
                      font=(FONT_NAME, 14, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
         ctk.CTkLabel(col_headers, text="ACTION", font=(FONT_NAME, 14, "bold"),
                      text_color=TEXT_GRAY).pack(side="right", padx=10)
-        self.scroll = ctk.CTkScrollableFrame(self.dash_wrapper, fg_color="transparent")
-        self.scroll.pack(fill="both", expand=True, padx=10, pady=(0, 8))
+        scroll_area = _tk.Frame(self.dash_wrapper, bg="#0A0A0A")
+        scroll_area.pack(fill="both", expand=True, padx=10, pady=(0, 8))
+        self._scroll_canvas = _tk.Canvas(scroll_area, bg="#0A0A0A", highlightthickness=0)
+        self._v_scrollbar = ctk.CTkScrollbar(scroll_area, orientation="vertical", command=self._scroll_canvas.yview)
+        self._h_scrollbar = ctk.CTkScrollbar(scroll_area, orientation="horizontal", command=self._scroll_canvas.xview)
+        self._h_scrollbar.pack(side="bottom", fill="x")
+        self._v_scrollbar.pack(side="right", fill="y")
+        self._scroll_canvas.pack(side="left", fill="both", expand=True)
+        self._scroll_canvas.configure(yscrollcommand=self._v_scrollbar.set, xscrollcommand=self._h_scrollbar.set)
+        self.scroll = ctk.CTkFrame(self._scroll_canvas, fg_color="transparent")
+        self._canvas_window = self._scroll_canvas.create_window((0, 0), window=self.scroll, anchor="nw")
+        def _update_scrollregion(event=None):
+            self._scroll_canvas.configure(scrollregion=self._scroll_canvas.bbox("all"))
+        def _update_canvas_width(event=None):
+            w = max(self._scroll_canvas.winfo_width(), 1480)
+            self._scroll_canvas.itemconfig(self._canvas_window, width=w)
+            self._scroll_canvas.configure(scrollregion=self._scroll_canvas.bbox("all"))
+        self.scroll.bind("<Configure>", _update_scrollregion)
+        self._scroll_canvas.bind("<Configure>", _update_canvas_width)
+        self._scroll_canvas.bind("<MouseWheel>", lambda e: self._scroll_canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
         self.empty_label = ctk.CTkLabel(
             self.scroll, text="NO ACCOUNTS CONNECTED. CLICK '+ ADD ACCOUNTS' TO BEGIN.",
             font=(FONT_NAME, 18, "bold"), text_color=TEXT_GRAY)
@@ -394,7 +453,6 @@ class App(ctk.CTk):
         log_header.pack(side="top", fill="x", padx=20, pady=(0, 2))
         ctk.CTkLabel(log_header, text="SYSTEM CONSOLE — REALTIME",
                      font=(FONT_NAME, 13, "bold"), text_color=TEXT_GRAY).pack(side="left")
-        
         self.lbl_clock = ctk.CTkLabel(log_header, text="", font=(FONT_NAME, 14, "bold"), text_color=CYAN)
         self.lbl_clock.pack(side="right", padx=5)
 
@@ -427,32 +485,25 @@ class App(ctk.CTk):
             time.sleep(interval)
 
     def fetch_presence_batch(self):
-        uid_cookie_map = {}
+        results = {}
         for w in self.accounts.values():
-            if w.user_id and w.is_account_on and not w.is_launching:
-                uid_cookie_map[w.user_id] = w.cookie
-
-        if not uid_cookie_map:
-            return {}
-
-        cookie = next(iter(uid_cookie_map.values()))
-        try:
-            s = requests.Session()
-            s.cookies.set(".ROBLOSECURITY", cookie, domain=".roblox.com")
-            r = s.post(
-                "https://presence.roblox.com/v1/presence/users",
-                json={"userIds": list(uid_cookie_map.keys())},
-                timeout=8,
-            )
-            if r.status_code == 200:
-                return {
-                    p["userId"]: p.get("userPresenceType", 0)
-                    for p in r.json().get("userPresences", [])
-                    if "userId" in p
-                }
-        except Exception:
-            pass
-        return {}
+            if not (w.user_id and w.is_account_on and not w.is_launching):
+                continue
+            try:
+                s = requests.Session()
+                s.cookies.set(".ROBLOSECURITY", w.cookie, domain=".roblox.com")
+                r = s.post(
+                    "https://presence.roblox.com/v1/presence/users",
+                    json={"userIds": [w.user_id]},
+                    timeout=8,
+                )
+                if r.status_code == 200:
+                    presences = r.json().get("userPresences", [])
+                    if presences:
+                        results[w.user_id] = presences[0].get("userPresenceType", 0)
+            except Exception:
+                pass
+        return results
 
     def _drop_log_entry(self, pid):
         with self._log_map_lock:
@@ -477,7 +528,7 @@ class App(ctk.CTk):
             return None, 0
 
         unclaimed = [f for f in all_files if f not in claimed]
-        pool = unclaimed if unclaimed else all_files 
+        pool = unclaimed if unclaimed else all_files
 
         proc_start = None
         try:
@@ -486,7 +537,7 @@ class App(ctk.CTk):
             pass
 
         if proc_start is not None:
-            TIME_WINDOW = 90.0 
+            TIME_WINDOW = 90.0
             candidates = []
             for fpath in pool:
                 try:
@@ -609,73 +660,80 @@ class App(ctk.CTk):
         if w.is_launching:
             return False
         w.is_launching = True
+        # Acquire the global lock so only one Roblox process spawns at a time,
+        # preventing multiple accounts from grabbing the same PID.
+        self._launch_lock.acquire()
         self.add_log(f"🚀 Launching {w.account_name}...")
-
-        ticket = self.get_auth_ticket(w.cookie)
-        if not ticket:
-            self.add_log(f"❌ Failed to get Auth Ticket for {w.account_name}")
-            w.is_launching = False
-            return False
-
-        if w.pid:
-            self._drop_log_entry(w.pid)
-            w.pid = None
-
-        w.rejoin_attempts = 0
-        self.after(0, lambda: w.lbl_count.configure(text=f"0/{self.entry_limit.get()}"))
-
         try:
-            old_pids = {p.pid for p in psutil.process_iter(['name']) if "RobloxPlayerBeta" in p.info['name']}
-        except Exception:
-            old_pids = set()
-
-        if w.join_method == "Private Server":
-            link = w.entry_psl.get().strip()
-            try:
-                lc = re.search(r"privateServerLinkCode=([\w-]+)", link).group(1)
-                pid_val = re.search(r"games/(\d+)", link).group(1)
-            except AttributeError:
-                self.add_log(f"❌ Invalid private server link for {w.account_name}")
-                w.is_launching = False
+            ticket = self.get_auth_ticket(w.cookie)
+            if not ticket:
+                self.add_log(f"❌ Failed to get Auth Ticket for {w.account_name}")
                 return False
-            lurl = (f"https%3A%2F%2Fassetgame.roblox.com%2Fgame%2FPlaceLauncher.ashx"
-                    f"%3Frequest%3DRequestPrivateGame%26browserTrackerId%3D{int(time.time())}"
-                    f"%26placeId%3D{pid_val}%26linkCode%3D{lc}")
-        else:
-            pid_val = w.entry_pid.get().strip()
-            lurl = (f"https%3A%2F%2Fassetgame.roblox.com%2Fgame%2FPlaceLauncher.ashx"
-                    f"%3Frequest%3DRequestGame%26browserTrackerId%3D{int(time.time())}"
-                    f"%26placeId%3D{pid_val}%26isReadOnly%3Dfalse")
 
-        self.close_roblox_handle()
-        subprocess.Popen(
-            f"start roblox-player:1+launchmode:play+gameinfo:{ticket}+placelauncherurl:{lurl}",
-            shell=True,
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        )
+            if w.pid:
+                self._drop_log_entry(w.pid)
+                w.pid = None
 
-        new_pid = None
-        for _ in range(PID_POLL_ATTEMPTS):
-            time.sleep(PID_POLL_INTERVAL)
+            w.rejoin_attempts = 0
+            self.after(0, lambda: w.lbl_count.configure(text=f"0/{self.entry_limit.get()}"))
+
             try:
-                current_pids = {p.pid for p in psutil.process_iter(['name']) if "RobloxPlayerBeta" in p.info['name']}
+                old_pids = {p.pid for p in psutil.process_iter(['name']) if "RobloxPlayerBeta" in p.info['name']}
             except Exception:
-                continue
-            fresh = current_pids - old_pids
-            if fresh:
-                new_pid = next(iter(fresh))
-                break
+                old_pids = set()
 
-        if new_pid:
-            w.pid = new_pid
-            w._last_presence = None
-            self.sync_log_file(new_pid)
-            self.add_log(f"✅ PID {new_pid} assigned to {w.account_name}")
-        else:
-            self.add_log(f"⚠️ Could not detect PID for {w.account_name} after launch")
+            if w.join_method == "Private Server":
+                link = w.entry_psl.get().strip()
+                try:
+                    lc = re.search(r"privateServerLinkCode=([\w-]+)", link).group(1)
+                    pid_val = re.search(r"games/(\d+)", link).group(1)
+                except AttributeError:
+                    self.add_log(f"❌ Invalid private server link for {w.account_name}")
+                    return False
+                lurl = (f"https%3A%2F%2Fassetgame.roblox.com%2Fgame%2FPlaceLauncher.ashx"
+                        f"%3Frequest%3DRequestPrivateGame%26browserTrackerId%3D{int(time.time())}"
+                        f"%26placeId%3D{pid_val}%26linkCode%3D{lc}")
+            else:
+                pid_val = w.entry_pid.get().strip()
+                lurl = (f"https%3A%2F%2Fassetgame.roblox.com%2Fgame%2FPlaceLauncher.ashx"
+                        f"%3Frequest%3DRequestGame%26browserTrackerId%3D{int(time.time())}"
+                        f"%26placeId%3D{pid_val}%26isReadOnly%3Dfalse")
 
-        w.is_launching = False
-        return new_pid is not None
+            self.close_roblox_handle()
+            subprocess.Popen(
+                f"start roblox-player:1+launchmode:play+gameinfo:{ticket}+placelauncherurl:{lurl}",
+                shell=True,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+
+            new_pid = None
+            for _ in range(PID_POLL_ATTEMPTS):
+                time.sleep(PID_POLL_INTERVAL)
+                try:
+                    current_pids = {p.pid for p in psutil.process_iter(['name']) if "RobloxPlayerBeta" in p.info['name']}
+                except Exception:
+                    continue
+                fresh = current_pids - old_pids
+                if fresh:
+                    new_pid = next(iter(fresh))
+                    break
+
+            if new_pid:
+                w.pid = new_pid
+                w._last_presence = None
+                self.sync_log_file(new_pid)
+                self.add_log(f"✅ PID {new_pid} assigned to {w.account_name}")
+            else:
+                self.add_log(f"⚠️ Could not detect PID for {w.account_name} after launch")
+
+            # Hold the lock for 2 extra seconds so the next account's launch
+            # doesn't start before this process is fully registered by the OS.
+            time.sleep(2)
+            return new_pid is not None
+
+        finally:
+            self._launch_lock.release()
+            w.is_launching = False
 
     def _ui_set_online(self, widget, label="ONLINE"):
         self.after(0, lambda: [
@@ -736,7 +794,7 @@ class App(ctk.CTk):
                         if process_alive:
                             dc_reason = self.check_disconnect_in_logs(pid)
                             if not dc_reason:
-                                continue  
+                                continue
                         else:
                             continue
 
@@ -835,7 +893,7 @@ class App(ctk.CTk):
                         )
                         self._ui_set_event(widget, "Limit reached", RED)
 
-            time.sleep(3)
+            time.sleep(1)
 
     def close_roblox_handle(self):
         try:
@@ -910,7 +968,7 @@ class App(ctk.CTk):
                 uid, name = res.json()["id"], res.json()["name"]
                 row_obj.user_id = uid
                 row_obj.account_name = name
-                truncated = (name[:10] + '...') if len(name) > 11 else name
+                truncated = (name[:14] + '...') if len(name) > 14 else name
                 self.after(0, lambda t=truncated: row_obj.lbl_name.configure(text=t))
                 try:
                     tr = requests.get(
@@ -927,8 +985,7 @@ class App(ctk.CTk):
             pass
 
     def _update_row_ui(self, row, name, img):
-        # Truncate properly so long names don't push buttons
-        truncated_name = (name[:10] + '...') if len(name) > 11 else name
+        truncated_name = (name[:14] + '...') if len(name) > 14 else name
         row.lbl_name.configure(text=truncated_name)
         row.img_label.configure(image=img)
         row.account_name = name
@@ -939,12 +996,11 @@ class App(ctk.CTk):
         pop.geometry("500x450")
         pop.attributes('-topmost', True)
         ctk.CTkLabel(pop, text="Paste cookies here:", font=(FONT_NAME, 15)).pack(pady=10)
-        
+
         box = ctk.CTkTextbox(pop, width=450, height=300, fg_color="#0D0D0D", font=(FONT_NAME, 14))
         box.pack(padx=20)
 
-        # Ghost text logic
-        placeholder = "ONE COOKIE PER LINE \nEXAMPLE\nCOOKIE\nCOOKIE"
+        placeholder = "example : COOKIE\nCOOKIE"
         box.insert("1.0", placeholder)
         box.configure(text_color="gray")
 
@@ -969,7 +1025,7 @@ class App(ctk.CTk):
             for c in cookies:
                 row = self._create_row("Loading...", c, self.placeholder_avatar)
                 threading.Thread(target=self.async_load_data, args=(row,), daemon=True).start()
-        
+
         ctk.CTkButton(pop, text="ADD ALL", font=(FONT_NAME, 14), command=process).pack(pady=15)
 
     def _create_row(self, name, cookie, img, pid="", psl="", mode="Place ID"):
