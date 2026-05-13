@@ -4,6 +4,16 @@ from PIL import Image, ImageTk, ImageDraw
 from datetime import datetime
 from tkinter import filedialog, messagebox
 
+# --- PYFONTS INTEGRATION ---
+try:
+    from pyfonts import load_google_font
+    # We load the font; pyfonts registers it with the system for the session
+    acme_font_res = load_google_font("Acme")
+    FONT_NAME = "Acme"
+except Exception:
+    FONT_NAME = "Arial" # Fallback
+# ---------------------------
+
 # Attempt win32 imports for Arrange Windows
 try:
     import win32gui, win32con, win32api
@@ -107,53 +117,60 @@ class AccountRow(ctk.CTkFrame):
         self._last_presence = None
         self._last_dc_time = 0.0
 
+        # column 1 is the account info; minsize ensures the MODE button is always aligned
+        self.grid_columnconfigure(1, minsize=220)
         self.grid_columnconfigure(4, weight=1)
 
         self.check_var = ctk.BooleanVar(value=False)
         self.cb_select = ctk.CTkCheckBox(self, text="", variable=self.check_var, width=30, fg_color=CYAN, border_color="#333", hover_color="#00A3B4")
-        self.cb_select.grid(row=0, column=0, padx=(10, 5), pady=5)
+        self.cb_select.grid(row=0, column=0, padx=(10, 5), pady=10)
 
-        self.info_frame = ctk.CTkFrame(self, fg_color="transparent", width=150)
+        # Container for Avatar + Name with strict fixed width to keep buttons aligned
+        self.info_frame = ctk.CTkFrame(self, fg_color="transparent", width=210, height=40)
         self.info_frame.grid(row=0, column=1, padx=5, sticky="w")
+        self.info_frame.grid_propagate(False)
+        
         self.img_label = ctk.CTkLabel(self.info_frame, text="", image=avatar_img)
         self.img_label.pack(side="left", padx=(0, 5))
-        self.lbl_name = ctk.CTkLabel(self.info_frame, text=name, font=("Consolas", 11, "bold"), text_color="#DDDDDD", anchor="w")
+        
+        # Truncate at 10 chars to ensure it fits the Acme font width in the container
+        display_name = (name[:10] + '...') if len(name) > 11 else name
+        self.lbl_name = ctk.CTkLabel(self.info_frame, text=display_name, font=(FONT_NAME, 14, "bold"), text_color="#DDDDDD", anchor="w")
         self.lbl_name.pack(side="left")
 
-        self.btn_method = ctk.CTkButton(self, text="MODE: ID", width=85, height=26, font=("Arial", 10, "bold"), command=self.toggle_method)
-        self.grid(row=0, column=2, padx=5) # Fixed layout alignment issues from previous snippet
+        self.btn_method = ctk.CTkButton(self, text="MODE: ID", width=95, height=34, font=(FONT_NAME, 12, "bold"), command=self.toggle_method)
         self.btn_method.grid(row=0, column=2, padx=5)
 
-        self.entry_pid = ctk.CTkEntry(self, placeholder_text="ID", width=70, fg_color="#151515", border_color="#333", font=("Arial", 10))
+        self.entry_pid = ctk.CTkEntry(self, placeholder_text="ID", width=80, height=34, fg_color="#151515", border_color="#333", font=(FONT_NAME, 12))
         self.entry_pid.insert(0, pid)
         self.entry_pid.grid(row=0, column=3, padx=2)
 
-        self.entry_psl = ctk.CTkEntry(self, placeholder_text="Private Link", fg_color="#151515", border_color="#333", font=("Arial", 10))
+        self.entry_psl = ctk.CTkEntry(self, placeholder_text="Private Link", height=34, fg_color="#151515", border_color="#333", font=(FONT_NAME, 12))
         self.entry_psl.insert(0, psl)
         self.entry_psl.grid(row=0, column=4, padx=2, sticky="ew")
 
-        self.status_frame = ctk.CTkFrame(self, fg_color="transparent", width=80)
+        self.status_frame = ctk.CTkFrame(self, fg_color="transparent", width=100)
         self.status_frame.grid(row=0, column=5, padx=5)
         self.status_circle = ctk.CTkLabel(self.status_frame, text="●", text_color="gray", width=15)
         self.status_circle.pack(side="left")
-        self.lbl_status = ctk.CTkLabel(self.status_frame, text="OFFLINE", text_color="gray", font=("Arial", 10, "bold"))
+        self.lbl_status = ctk.CTkLabel(self.status_frame, text="OFFLINE", text_color="gray", font=(FONT_NAME, 12, "bold"))
         self.lbl_status.pack(side="left")
 
-        self.lbl_event = ctk.CTkLabel(self, text="Standby...", width=120, anchor="w", text_color=TEXT_GRAY, font=("Consolas", 10))
+        self.lbl_event = ctk.CTkLabel(self, text="Standby...", width=130, anchor="w", text_color=TEXT_GRAY, font=(FONT_NAME, 12))
         self.lbl_event.grid(row=0, column=6, padx=5)
 
-        self.lbl_count = ctk.CTkLabel(self, text=f"0/{self.app.entry_limit.get()}", width=50, font=("Consolas", 11))
+        self.lbl_count = ctk.CTkLabel(self, text=f"0/{self.app.entry_limit.get()}", width=60, font=(FONT_NAME, 14))
         self.lbl_count.grid(row=0, column=7, padx=5)
 
         self.action_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.action_frame.grid(row=0, column=8, padx=5, sticky="e")
 
-        ctk.CTkButton(self.action_frame, text="JOIN", width=45, height=24, fg_color=CYAN, text_color="black", font=("Arial", 10, "bold"),
+        ctk.CTkButton(self.action_frame, text="JOIN", width=50, height=30, fg_color=CYAN, text_color="black", font=(FONT_NAME, 11, "bold"),
                       command=lambda: threading.Thread(target=self.app.launch_roblox, args=(self,), daemon=True).start()).pack(side="left", padx=2)
-        self.btn_power = ctk.CTkButton(self.action_frame, text="OFF", width=45, height=24, fg_color=RED, font=("Arial", 10, "bold"), command=self.toggle_power)
+        self.btn_power = ctk.CTkButton(self.action_frame, text="OFF", width=50, height=30, fg_color=RED, font=(FONT_NAME, 11, "bold"), command=self.toggle_power)
         self.btn_power.pack(side="left", padx=2)
-        ctk.CTkButton(self.action_frame, text="KILL", width=40, height=24, fg_color=RED, text_color="white", font=("Arial", 10, "bold"), command=self.kill_proc).pack(side="left", padx=2)
-        ctk.CTkButton(self.action_frame, text="DEL", width=40, height=24, fg_color=CYAN, text_color="black", font=("Arial", 10, "bold"),
+        ctk.CTkButton(self.action_frame, text="KILL", width=50, height=30, fg_color=RED, text_color="white", font=(FONT_NAME, 11, "bold"), command=self.kill_proc).pack(side="left", padx=2)
+        ctk.CTkButton(self.action_frame, text="DEL", width=50, height=30, fg_color=CYAN, text_color="black", font=(FONT_NAME, 11, "bold"),
                       command=self.remove_me).pack(side="left", padx=2)
 
         self.update_method_ui()
@@ -239,7 +256,7 @@ class App(ctk.CTk):
         threading.Thread(target=self.monitor_loop, daemon=True).start()
         threading.Thread(target=self.webhook_worker, daemon=True).start()
         self.after(100, self.load_config)
-        self.update_clock() # Start clock loop
+        self.update_clock() 
 
     def update_clock(self):
         now = datetime.now().strftime("%H:%M:%S | %d/%m/%Y")
@@ -263,126 +280,125 @@ class App(ctk.CTk):
             img_obj = Image.open(png_path)
             my_logo = ctk.CTkImage(light_image=img_obj, dark_image=img_obj, size=(90, 90))
             ctk.CTkLabel(logo_frame, text="", image=my_logo).pack()
-        ctk.CTkLabel(logo_frame, text="PXG HUB", font=("Arial", 16, "bold"), text_color="white").pack(pady=(5, 0))
-        ctk.CTkLabel(logo_frame, text="ROBLOX MANAGER", font=("Arial", 10, "bold"), text_color=CYAN).pack()
-        ctk.CTkButton(self.sidebar, text="+ ADD ACCOUNTS", fg_color=CYAN, text_color="black", font=("Arial", 12, "bold"),
+        ctk.CTkLabel(logo_frame, text="PXG HUB", font=(FONT_NAME, 22, "bold"), text_color="white").pack(pady=(5, 0))
+        ctk.CTkLabel(logo_frame, text="ROBLOX MANAGER", font=(FONT_NAME, 14, "bold"), text_color=CYAN).pack()
+        ctk.CTkButton(self.sidebar, text="+ ADD ACCOUNTS", height=40, fg_color=CYAN, text_color="black", font=(FONT_NAME, 15, "bold"),
                       command=self.bulk_add_dialog).pack(pady=(10, 10), padx=20, fill="x")
-        ctk.CTkButton(self.sidebar, text="✕ CLEAR LOGS", fg_color=DARK_BTN, text_color="white", font=("Arial", 11, "bold"),
+        ctk.CTkButton(self.sidebar, text="✕ CLEAR LOGS", height=40, fg_color=DARK_BTN, text_color="white", font=(FONT_NAME, 14, "bold"),
                       command=self.clear_logs).pack(pady=(0, 20), padx=20, fill="x")
         sys_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         sys_frame.pack(fill="x", padx=20, pady=(10, 15))
-        ctk.CTkButton(sys_frame, text="↑ UPDATE VERSION", fg_color=YELLOW, text_color="black",
-                      font=("Arial", 11, "bold"), command=self.update_app).pack(fill="x", pady=4)
-        ctk.CTkButton(sys_frame, text="⏻ JOIN ALL", fg_color=CYAN, text_color="black",
-                      font=("Arial", 11, "bold"), command=self.join_all_accounts).pack(fill="x", pady=4)
-        ctk.CTkButton(sys_frame, text="⊞ ARRANGE WINDOWS", fg_color=PURPLE, text_color="white",
-                      font=("Arial", 11, "bold"), command=self.arrange_windows).pack(fill="x", pady=4)
-        ctk.CTkButton(sys_frame, text="✕ KILL ALL PROCESS", fg_color=RED, text_color="white",
-                      font=("Arial", 11, "bold"), command=self.kill_all_process).pack(fill="x", pady=4)
+        ctk.CTkButton(sys_frame, text="↑ UPDATE VERSION", height=35, fg_color=YELLOW, text_color="black",
+                      font=(FONT_NAME, 13, "bold"), command=self.update_app).pack(fill="x", pady=4)
+        ctk.CTkButton(sys_frame, text="⏻ JOIN ALL", height=35, fg_color=CYAN, text_color="black",
+                      font=(FONT_NAME, 13, "bold"), command=self.join_all_accounts).pack(fill="x", pady=4)
+        ctk.CTkButton(sys_frame, text="⊞ ARRANGE WINDOWS", height=35, fg_color=PURPLE, text_color="white",
+                      font=(FONT_NAME, 13, "bold"), command=self.arrange_windows).pack(fill="x", pady=4)
+        ctk.CTkButton(sys_frame, text="✕ KILL ALL PROCESS", height=35, fg_color=RED, text_color="white",
+                      font=(FONT_NAME, 13, "bold"), command=self.kill_all_process).pack(fill="x", pady=4)
         webhook_frame = ctk.CTkFrame(self.sidebar, fg_color="#151515", corner_radius=8)
         webhook_frame.pack(fill="x", padx=20, pady=10)
-        ctk.CTkLabel(webhook_frame, text="DISCORD WEBHOOK", font=("Arial", 10, "bold"), text_color=CYAN).pack(pady=(5, 2))
-        self.webhook_url_entry = ctk.CTkEntry(webhook_frame, placeholder_text="Webhook URL", height=28, font=("Arial", 10), fg_color="#0A0A0A")
+        ctk.CTkLabel(webhook_frame, text="DISCORD WEBHOOK", font=(FONT_NAME, 13, "bold"), text_color=CYAN).pack(pady=(5, 2))
+        self.webhook_url_entry = ctk.CTkEntry(webhook_frame, placeholder_text="Webhook URL", height=32, font=(FONT_NAME, 12), fg_color="#0A0A0A")
         self.webhook_url_entry.pack(fill="x", padx=10, pady=2)
-        self.webhook_interval_entry = ctk.CTkEntry(webhook_frame, placeholder_text="Interval (sec)", height=28, font=("Arial", 10), fg_color="#0A0A0A")
+        self.webhook_interval_entry = ctk.CTkEntry(webhook_frame, placeholder_text="Interval (sec)", height=32, font=(FONT_NAME, 12), fg_color="#0A0A0A")
         self.webhook_interval_entry.pack(fill="x", padx=10, pady=2)
         self.webhook_enabled_var = ctk.BooleanVar(value=False)
         self.webhook_switch = ctk.CTkSwitch(webhook_frame, text="Enable Webhook", variable=self.webhook_enabled_var,
-                                            font=("Arial", 10), progress_color=CYAN)
+                                            font=(FONT_NAME, 12), progress_color=CYAN)
         self.webhook_switch.pack(pady=8)
         bottom_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         bottom_frame.pack(side="bottom", fill="x", padx=20, pady=20)
-        ctk.CTkButton(bottom_frame, text="💾 SAVE CONFIG", fg_color="#003040", text_color=CYAN, border_width=1,
-                      border_color=CYAN, font=("Arial", 11, "bold"), command=self.save_config).pack(fill="x", pady=5)
+        ctk.CTkButton(bottom_frame, text="💾 SAVE CONFIG", height=42, fg_color="#003040", text_color=CYAN, border_width=1,
+                      border_color=CYAN, font=(FONT_NAME, 15, "bold"), command=self.save_config).pack(fill="x", pady=5)
         ex_im = ctk.CTkFrame(bottom_frame, fg_color="transparent")
         ex_im.pack(fill="x")
-        ctk.CTkButton(ex_im, text="EXPORT", fg_color=DARK_BTN, width=85, font=("Arial", 9, "bold"),
+        ctk.CTkButton(ex_im, text="EXPORT", fg_color=DARK_BTN, width=85, height=32, font=(FONT_NAME, 12, "bold"),
                       command=self.export_config).pack(side="left")
-        ctk.CTkButton(ex_im, text="IMPORT", fg_color=DARK_BTN, width=85, font=("Arial", 9, "bold"),
+        ctk.CTkButton(ex_im, text="IMPORT", fg_color=DARK_BTN, width=85, height=32, font=(FONT_NAME, 12, "bold"),
                       command=self.import_config).pack(side="right")
         self.main_container = ctk.CTkFrame(self, fg_color="transparent")
         self.main_container.pack(side="right", fill="both", expand=True)
 
-        self.action_bar = ctk.CTkFrame(self.main_container, height=52, fg_color=PANEL_COLOR, corner_radius=8)
+        self.action_bar = ctk.CTkFrame(self.main_container, height=65, fg_color=PANEL_COLOR, corner_radius=8)
         self.action_bar.pack(side="top", fill="x", padx=20, pady=(16, 6))
         self.action_bar.pack_propagate(False)
         self.left_actions = ctk.CTkFrame(self.action_bar, fg_color="transparent")
         self.left_actions.pack(side="left", fill="both", expand=True, padx=6, pady=8)
-        ctk.CTkLabel(self.left_actions, text="APPLY TO SELECTED:", font=("Arial", 10, "bold"),
+        ctk.CTkLabel(self.left_actions, text="APPLY TO SELECTED:", font=(FONT_NAME, 13, "bold"),
                      text_color=TEXT_GRAY).pack(side="left", padx=(4, 4))
-        ctk.CTkButton(self.left_actions, text="PLACE ID", width=76, height=28, fg_color=CYAN,
-                      text_color="black", font=("Arial", 10, "bold"),
+        ctk.CTkButton(self.left_actions, text="PLACE ID", width=95, height=34, fg_color=CYAN,
+                      text_color="black", font=(FONT_NAME, 12, "bold"),
                       command=lambda: self.bulk_set_mode("Place ID")).pack(side="left", padx=2)
-        ctk.CTkButton(self.left_actions, text="PRIVATE", width=72, height=28, fg_color=PURPLE, text_color="white", font=("Arial", 10, "bold"), command=lambda: self.bulk_set_mode("Private Server")).pack(side="left", padx=2)
+        ctk.CTkButton(self.left_actions, text="PRIVATE", width=95, height=34, fg_color=PURPLE, text_color="white", font=(FONT_NAME, 12, "bold"), command=lambda: self.bulk_set_mode("Private Server")).pack(side="left", padx=2)
         self.bulk_id_entry = ctk.CTkEntry(self.left_actions, placeholder_text="Place ID",
-                                          width=80, height=28, font=("Arial", 10), fg_color="#0A0A0A")
+                                          width=110, height=34, font=(FONT_NAME, 12), fg_color="#0A0A0A")
         self.bulk_id_entry.pack(side="left", padx=(10, 2))
-        ctk.CTkButton(self.left_actions, text="UPD", width=42, height=28, fg_color=CYAN,
-                      text_color="black", font=("Arial", 10, "bold"),
+        ctk.CTkButton(self.left_actions, text="UPD", width=50, height=34, fg_color=CYAN,
+                      text_color="black", font=(FONT_NAME, 12, "bold"),
                       command=self.bulk_update_id).pack(side="left", padx=2)
         self.bulk_ps_entry = ctk.CTkEntry(self.left_actions, placeholder_text="Private Server Link",
-                                          height=28, font=("Arial", 10), fg_color="#0A0A0A")
+                                          height=34, font=(FONT_NAME, 12), fg_color="#0A0A0A")
         self.bulk_ps_entry.pack(side="left", padx=(10, 2), fill="x", expand=True)
-        ctk.CTkButton(self.left_actions, text="UPD", width=42, height=28, fg_color=PURPLE, text_color="white", font=("Arial", 10, "bold"), command=self.bulk_update_ps).pack(side="left", padx=(2, 4))
+        ctk.CTkButton(self.left_actions, text="UPD", width=50, height=34, fg_color=PURPLE, text_color="white", font=(FONT_NAME, 12, "bold"), command=self.bulk_update_ps).pack(side="left", padx=(2, 4))
 
         self.dash_wrapper = ctk.CTkFrame(self.main_container, fg_color=PANEL_COLOR, corner_radius=10)
         self.dash_wrapper.pack(side="top", fill="both", expand=True, padx=20, pady=(6, 6))
-        col_headers = ctk.CTkFrame(self.dash_wrapper, fg_color="#151515", corner_radius=6, height=32)
+        col_headers = ctk.CTkFrame(self.dash_wrapper, fg_color="#151515", corner_radius=6, height=38)
         col_headers.pack(fill="x", padx=10, pady=(8, 4))
         col_headers.pack_propagate(False)
         self.header_check = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(col_headers, text="", variable=self.header_check, width=30, fg_color=CYAN,
                         command=self.toggle_select_all).pack(side="left", padx=(10, 5))
-        ctk.CTkLabel(col_headers, text="ACCOUNT", width=140, anchor="w",
-                     font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
+        # Account header matches minsize of info_frame
+        ctk.CTkLabel(col_headers, text="ACCOUNT", width=220, anchor="w",
+                     font=(FONT_NAME, 14, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
         ctk.CTkLabel(col_headers, text="JOINING METHOD (PLACE ID & PS LINK)", width=430, anchor="w",
-                     font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
+                     font=(FONT_NAME, 14, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
         ctk.CTkLabel(col_headers, text="STATUS", width=90, anchor="w",
-                     font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
+                     font=(FONT_NAME, 14, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
         ctk.CTkLabel(col_headers, text="LAST EVENT", width=120, anchor="w",
-                     font=("Arial", 10, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
-        ctk.CTkLabel(col_headers, text="ACTION", font=("Arial", 10, "bold"),
+                     font=(FONT_NAME, 14, "bold"), text_color=TEXT_GRAY).pack(side="left", padx=5)
+        ctk.CTkLabel(col_headers, text="ACTION", font=(FONT_NAME, 14, "bold"),
                      text_color=TEXT_GRAY).pack(side="right", padx=10)
         self.scroll = ctk.CTkScrollableFrame(self.dash_wrapper, fg_color="transparent")
         self.scroll.pack(fill="both", expand=True, padx=10, pady=(0, 8))
         self.empty_label = ctk.CTkLabel(
             self.scroll, text="NO ACCOUNTS CONNECTED. CLICK '+ ADD ACCOUNTS' TO BEGIN.",
-            font=("Arial", 12, "bold"), text_color=TEXT_GRAY)
+            font=(FONT_NAME, 18, "bold"), text_color=TEXT_GRAY)
         self.empty_label.pack(pady=100)
 
-        ctrl_bar = ctk.CTkFrame(self.main_container, height=44, fg_color=PANEL_COLOR, corner_radius=8)
+        ctrl_bar = ctk.CTkFrame(self.main_container, height=60, fg_color=PANEL_COLOR, corner_radius=8)
         ctrl_bar.pack(side="top", fill="x", padx=20, pady=(0, 6))
         ctrl_bar.pack_propagate(False)
         ctrl_inner = ctk.CTkFrame(ctrl_bar, fg_color="transparent")
         ctrl_inner.pack(fill="both", expand=True, padx=8, pady=6)
-        ctk.CTkLabel(ctrl_inner, text="RETRY LIMIT:", font=("Arial", 10, "bold"),
+        ctk.CTkLabel(ctrl_inner, text="RETRY LIMIT:", font=(FONT_NAME, 13, "bold"),
                      text_color=TEXT_GRAY).pack(side="left", padx=(4, 2))
-        self.entry_limit = ctk.CTkEntry(ctrl_inner, width=42, height=28, justify="center",
-                                        font=("Arial", 10, "bold"), fg_color="#0A0A0A",
+        self.entry_limit = ctk.CTkEntry(ctrl_inner, width=55, height=36, justify="center",
+                                        font=(FONT_NAME, 13, "bold"), fg_color="#0A0A0A",
                                         border_color="#333", border_width=1)
         self.entry_limit.insert(0, "5")
         self.entry_limit.pack(side="left", padx=(0, 12))
-        ctk.CTkButton(ctrl_inner, text="▷ ENABLE SELECTED", height=28, width=140, fg_color=GREEN,
-                      text_color="black", font=("Arial", 10, "bold"),
+        ctk.CTkButton(ctrl_inner, text="▷ ENABLE SELECTED", height=36, width=170, fg_color=GREEN,
+                      text_color="black", font=(FONT_NAME, 13, "bold"),
                       command=self.bulk_enable).pack(side="left", padx=4)
-        ctk.CTkButton(ctrl_inner, text="✕ DISABLE SELECTED", height=28, width=140, fg_color=DARK_BTN,
-                      text_color=TEXT_GRAY, font=("Arial", 10, "bold"),
+        ctk.CTkButton(ctrl_inner, text="✕ DISABLE SELECTED", height=36, width=170, fg_color=DARK_BTN,
+                      text_color=TEXT_GRAY, font=(FONT_NAME, 13, "bold"),
                       command=self.bulk_disable).pack(side="left", padx=4)
-        ctk.CTkButton(ctrl_inner, text="🗑 DELETE SELECTED", height=28, width=140, fg_color=RED,
-                      text_color="white", font=("Arial", 10, "bold"),
+        ctk.CTkButton(ctrl_inner, text="🗑 DELETE SELECTED", height=36, width=170, fg_color=RED,
+                      text_color="white", font=(FONT_NAME, 13, "bold"),
                       command=self.bulk_delete).pack(side="left", padx=4)
 
-        # ── System console ─────────────────────────────────────────────────
         log_header = ctk.CTkFrame(self.main_container, fg_color="transparent")
         log_header.pack(side="top", fill="x", padx=20, pady=(0, 2))
         ctk.CTkLabel(log_header, text="SYSTEM CONSOLE — REALTIME",
-                     font=("Arial", 9, "bold"), text_color=TEXT_GRAY).pack(side="left")
+                     font=(FONT_NAME, 13, "bold"), text_color=TEXT_GRAY).pack(side="left")
         
-        # New Clock and Date Label
-        self.lbl_clock = ctk.CTkLabel(log_header, text="", font=("Arial", 9, "bold"), text_color=CYAN)
+        self.lbl_clock = ctk.CTkLabel(log_header, text="", font=(FONT_NAME, 14, "bold"), text_color=CYAN)
         self.lbl_clock.pack(side="right", padx=5)
 
-        self.log_box = ctk.CTkTextbox(self.main_container, height=130, font=("Consolas", 11),
+        self.log_box = ctk.CTkTextbox(self.main_container, height=130, font=(FONT_NAME, 14),
                                       fg_color="#060606", text_color="#AAAAAA",
                                       border_width=1, border_color="#1E1E1E", corner_radius=6)
         self.log_box.pack(fill="x", padx=20, pady=(0, 14))
@@ -853,7 +869,7 @@ class App(ctk.CTk):
                                   size, size, win32con.SWP_SHOWWINDOW)
 
     def save_config(self, m=None):
-        accs = [{"name": w.lbl_name.cget("text"), "cookie": w.cookie,
+        accs = [{"name": w.account_name, "cookie": w.cookie,
                  "pid": w.entry_pid.get(), "psl": w.entry_psl.get(),
                  "mode": w.join_method} for w in self.accounts.values()]
         full_config = {
@@ -893,19 +909,27 @@ class App(ctk.CTk):
             if res.status_code == 200:
                 uid, name = res.json()["id"], res.json()["name"]
                 row_obj.user_id = uid
-                tr = requests.get(
-                    f"https://thumbnails.roblox.com/v1/users/avatar-headshot"
-                    f"?userIds={uid}&size=48x48&format=Png&isCircular=true",
-                    timeout=5,
-                )
-                img_data = requests.get(tr.json()["data"][0]["imageUrl"], timeout=5).content
-                new_img = ctk.CTkImage(Image.open(io.BytesIO(img_data)), size=(32, 32))
-                self.after(0, lambda: self._update_row_ui(row_obj, name, new_img))
+                row_obj.account_name = name
+                truncated = (name[:10] + '...') if len(name) > 11 else name
+                self.after(0, lambda t=truncated: row_obj.lbl_name.configure(text=t))
+                try:
+                    tr = requests.get(
+                        f"https://thumbnails.roblox.com/v1/users/avatar-headshot"
+                        f"?userIds={uid}&size=48x48&format=Png&isCircular=true",
+                        timeout=5,
+                    )
+                    img_data = requests.get(tr.json()["data"][0]["imageUrl"], timeout=5).content
+                    new_img = ctk.CTkImage(Image.open(io.BytesIO(img_data)), size=(32, 32))
+                    self.after(0, lambda: self._update_row_ui(row_obj, name, new_img))
+                except Exception:
+                    pass
         except Exception:
             pass
 
     def _update_row_ui(self, row, name, img):
-        row.lbl_name.configure(text=name)
+        # Truncate properly so long names don't push buttons
+        truncated_name = (name[:10] + '...') if len(name) > 11 else name
+        row.lbl_name.configure(text=truncated_name)
         row.img_label.configure(image=img)
         row.account_name = name
 
@@ -914,17 +938,39 @@ class App(ctk.CTk):
         pop.title("Bulk Paste")
         pop.geometry("500x450")
         pop.attributes('-topmost', True)
-        ctk.CTkLabel(pop, text="Paste cookies here:").pack(pady=10)
-        box = ctk.CTkTextbox(pop, width=450, height=300, fg_color="#0D0D0D")
+        ctk.CTkLabel(pop, text="Paste cookies here:", font=(FONT_NAME, 15)).pack(pady=10)
+        
+        box = ctk.CTkTextbox(pop, width=450, height=300, fg_color="#0D0D0D", font=(FONT_NAME, 14))
         box.pack(padx=20)
+
+        # Ghost text logic
+        placeholder = "example : COOKIE\nCOOKIE"
+        box.insert("1.0", placeholder)
+        box.configure(text_color="gray")
+
+        def on_focus_in(event):
+            if box.get("1.0", "end-1c") == placeholder:
+                box.delete("1.0", "end")
+                box.configure(text_color="white")
+
+        def on_focus_out(event):
+            if not box.get("1.0", "end-1c").strip():
+                box.insert("1.0", placeholder)
+                box.configure(text_color="gray")
+
+        box.bind("<FocusIn>", on_focus_in)
+        box.bind("<FocusOut>", on_focus_out)
+
         def process():
             raw = box.get("1.0", "end").strip()
+            if raw == placeholder or not raw: return
             cookies = [c.strip() for c in raw.split("\n") if len(c.strip()) > 100]
             pop.destroy()
             for c in cookies:
                 row = self._create_row("Loading...", c, self.placeholder_avatar)
                 threading.Thread(target=self.async_load_data, args=(row,), daemon=True).start()
-        ctk.CTkButton(pop, text="ADD ALL", command=process).pack(pady=15)
+        
+        ctk.CTkButton(pop, text="ADD ALL", font=(FONT_NAME, 14), command=process).pack(pady=15)
 
     def _create_row(self, name, cookie, img, pid="", psl="", mode="Place ID"):
         if not self.accounts:
