@@ -944,7 +944,7 @@ class App(ctk.CTk):
         box.pack(padx=20)
 
         # Ghost text logic
-        placeholder = "example : COOKIE\nCOOKIE"
+        placeholder = "ONE COOKIE PER LINE \nEXAMPLE\nCOOKIE\nCOOKIE"
         box.insert("1.0", placeholder)
         box.configure(text_color="gray")
 
